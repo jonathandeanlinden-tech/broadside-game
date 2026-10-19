@@ -3916,7 +3916,7 @@ function prize(kind){
   if (kind === 'wood'){ const n = Math.min(6, cargoCap() - cargoUsed()); cargo.wood += n; ft(player.x, player.y - 24, `+${n} TIMBER`, '#e3b26a'); }
   if (kind === 'gun'){ prog.guns++; recomputeStats(false); ft(player.x, player.y - 24, '+1 CANNON', '#ffd23f'); }
   if (kind === 'gunsell'){ player.gold += 90; }
-  if (kind === 'repair'){ player.hp = Math.min(player.T.hp, player.hp + player.T.hp*0.5); player.holes = []; }
+  if (kind === 'repair'){ player.hp = Math.min(player.T.hp, player.hp + player.T.hp*0.5); player.holes = []; VO.say('repaired'); }
   if (kind === 'sink') player.gold += 40;
   e.noLoot = true; e.gold = 0;
   endDeck();
