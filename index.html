@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#08182a">
-<title>Broadside Mini v9</title>
+<title>Broadside Mini v10</title>
 <style>
   html,body{margin:0;height:100%;background:#0e3456;overflow:hidden}
   canvas{display:block;width:100vw;height:100vh}
@@ -778,19 +778,17 @@ function mkCanvas(wu, hu, res){
   g.setTransform(res, 0, 0, res, c.width/2, c.height/2);
   return [c, g];
 }
-function silhouette(src, col, blur){
+function silhouette(src, col){
   const c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
   const g = c.getContext('2d');
-  if (blur) g.filter = `blur(${blur}px)`;
-  g.drawImage(src, 0, 0); g.filter = 'none';
+  g.drawImage(src, 0, 0);
   g.globalCompositeOperation = 'source-in'; g.fillStyle = col; g.fillRect(0, 0, c.width, c.height);
   return c;
 }
-function tinted(src, col, blur){
+function tinted(src, col){
   const c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
   const g = c.getContext('2d');
-  if (blur) g.filter = `blur(${blur}px)`;
-  g.drawImage(src, 0, 0); g.filter = 'none';
+  g.drawImage(src, 0, 0);
   g.globalCompositeOperation = 'source-atop'; g.fillStyle = col; g.fillRect(0, 0, c.width, c.height);
   return c;
 }
@@ -813,11 +811,18 @@ function softSprite(col){
 function ell(x, y, rx, ry, rot=0){ ctx.beginPath(); ctx.ellipse(x, y, rx, ry, rot, 0, TAU); ctx.fill(); }
 function gell(g, x, y, rx, ry, rot=0){ g.beginPath(); g.ellipse(x, y, rx, ry, rot, 0, TAU); g.fill(); }
 
-/* ---------- perspective: tall things lean away from the view centre ---------- */
-// the camera also tilts slightly (looking from the south), so poles, trunks and walls always show a side
-const TILT = 0.32;
-function lean(x, y, h){ const k = h*0.00065*cam.z; return [(x - cam.x)*k, (y - cam.y)*k - h*TILT]; }
-const eyeY = () => cam.y + TILT/(0.00065*cam.z);
+/* ---------- perspective: 15-degree tilted camera angle ---------- */
+// The camera is pitched at an authentic 15° angle from zenith looking South-to-North
+const TILT_DEG = 15;
+const TILT_RAD = 15 * Math.PI / 180;
+const PITCH_Y = Math.cos(TILT_RAD); // ~0.9659 ground plane foreshortening
+const TILT_H = 0.58; // Vertical height projection along line of sight
+const TILT = TILT_H; // backward compatibility
+function lean(x, y, h){
+  const k = h * 0.00075 * cam.z;
+  return [(x - cam.x) * k, (y - cam.y) * k - h * TILT_H];
+}
+const eyeY = () => cam.y + TILT_H / (0.00075 * cam.z);
 
 /* ---------- audio & background music ---------- */
 let AC = null, muted = false;
@@ -1434,14 +1439,14 @@ function drawFacetRock(g, x, y, r, seed, foam){
   }
   const poly = (k, ox=0, oy=0) => { g.beginPath(); pts.forEach(([px,py],i) => { const qx = x + (px-x)*k + ox, qy = y + (py-y)*k + oy; i ? g.lineTo(qx,qy) : g.moveTo(qx,qy); }); g.closePath(); };
   if (foam){
-    const halo = g.createRadialGradient(x, y, r*0.6, x, y, r*2.3);
-    halo.addColorStop(0, 'rgba(110,215,190,0.75)'); halo.addColorStop(0.55, 'rgba(40,150,150,0.35)'); halo.addColorStop(1, 'rgba(20,100,125,0)');
-    g.fillStyle = halo; g.beginPath(); g.arc(x, y, r*2.3, 0, TAU); g.fill();
-    g.fillStyle = 'rgba(250,253,252,0.92)';
+    const halo = g.createRadialGradient(x, y, r*0.4, x, y, r*2.0);
+    halo.addColorStop(0, 'rgba(90,210,185,0.65)'); halo.addColorStop(0.5, 'rgba(30,140,140,0.25)'); halo.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = halo; g.beginPath(); g.arc(x, y, r*2.0, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(250,253,252,0.85)';
     for (const [px,py] of pts){
-      for (let k = 0; k < 3; k++){
-        const qx = x + (px-x)*(1.08 + rr()*0.18) + (rr()-0.5)*r*0.3, qy = y + (py-y)*(1.08 + rr()*0.18) + (rr()-0.5)*r*0.3;
-        g.beginPath(); g.arc(qx, qy, r*(0.12 + rr()*0.16), 0, TAU); g.fill();
+      for (let k = 0; k < 2; k++){
+        const qx = x + (px-x)*(1.05 + rr()*0.12) + (rr()-0.5)*r*0.2, qy = y + (py-y)*(1.05 + rr()*0.12) + (rr()-0.5)*r*0.2;
+        g.beginPath(); g.arc(qx, qy, r*(0.10 + rr()*0.12), 0, TAU); g.fill();
       }
     }
   }
@@ -5745,24 +5750,16 @@ function update(dt){
    ========================================================= */
 let vx0 = 0, vy0 = 0, vw = 0, vh = 0;
 const vis = (x, y, r) => x + r > vx0 && x - r < vx0 + vw && y + r > vy0 && y - r < vy0 + vh;
-const toScreen = (x, y) => [ (x - cam.x)*cam.z + VW/2, (y - cam.y)*cam.z + VH/2 ];
+const toScreen = (x, y) => [ (x - cam.x)*cam.z + VW/2, (y - cam.y)*cam.z*PITCH_Y + VH/2 ];
 
 function drawDeep(o){
   const depth = o.depth || 40;
   const [ox, oy] = lean(o.x, o.y, -depth);
   ctx.save(); ctx.translate(o.x + ox, o.y + oy); ctx.rotate(o.rot);
-  // Atmospheric ocean absorption: deeper submerged objects shift with intense parallax and subtle cyan tint
+  // Atmospheric ocean absorption: deeper submerged objects shift with parallax and deep cyan tint
   const alpha = o.shallow ? 0.85 : Math.max(0.35, 0.70 - depth * 0.003);
   ctx.globalAlpha = alpha;
   ctx.drawImage(o.cv, -o.ww/2, -o.hh/2, o.ww, o.hh);
-  if (graphicsMode === 'high' && !o.shallow){
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = 0.10 * Math.max(0, 1 - weather.rain);
-    ctx.fillStyle = '#4ae2ca';
-    const cx = Math.sin(time * 1.4 + o.x * 0.03) * 6;
-    ctx.fillRect(-o.ww/2 + cx, -o.hh/2, o.ww * 0.8, o.hh);
-    ctx.globalCompositeOperation = 'source-over';
-  }
   ctx.restore(); ctx.globalAlpha = 1;
 }
 function drawWater(){
@@ -5876,7 +5873,8 @@ function drawShip(s, alpha=1, scale=1, tilt=0, sailA=1){
   const tip = (hh) => { const [lx, ly] = lean(s.x, s.y, hh); return [lx + (rgx*roll + fwx*pitch)*hh, ly + (rgy*roll + fwy*pitch)*hh]; };
   // bigger ships stand taller out of the water and carry taller masts
   const hk = clamp(T.len/46, 0.6, 2.3), hh = Math.min(hk, 1.7);
-  const [dx3, dy3] = tip((3.5*hh + bobH)*scale), [dxs, dys] = tip(17*hk*scale), [dxt, dyt] = tip(30*hk*scale);
+  const hHull = (8.5*hh + bobH)*scale;
+  const [dx3, dy3] = tip(hHull), [dxs, dys] = tip(28*hk*scale), [dxt, dyt] = tip(50*hk*scale);
   const blit = (img, ox, oy, a) => {
     ctx.save(); ctx.translate(s.x + ox, s.y + oy); ctx.rotate(ang);
     ctx.globalAlpha = alpha*a;
@@ -5900,8 +5898,8 @@ function drawShip(s, alpha=1, scale=1, tilt=0, sailA=1){
   }
   // shadows on the water: the hull close by, the tall sails further out, shifting with 3D roll and pitch
   if (graphicsMode === 'high'){
-    blit(sp.hullSil, (5*hh - bobH*0.3) + (rgx*roll)*6*hh, (7*hh - bobH*0.3) + (rgy*roll)*6*hh, 0.45);
-    blit(sp.sailSil, 16*hk + (rgx*roll)*24*hk + fwx*pitch*12, 21*hk + (rgy*roll)*24*hk + fwy*pitch*12, 0.26*sailA);
+    blit(sp.hullSil, (8*hh - bobH*0.3) + (rgx*roll)*8*hh, (11*hh - bobH*0.3) + (rgy*roll)*8*hh, 0.42);
+    blit(sp.sailSil, 24*hk + (rgx*roll)*28*hk + fwx*pitch*14, 32*hk + (rgy*roll)*28*hk + fwy*pitch*14, 0.28*sailA);
   }
   if (s.fishing){
     const nx = s.x - Math.cos(s.a)*28, ny = s.y - Math.sin(s.a)*28;
@@ -5912,7 +5910,114 @@ function drawShip(s, alpha=1, scale=1, tilt=0, sailA=1){
     ctx.fillStyle = '#ff6a3a';
     for (let k = 0; k < 8; k++){ const a = k/8*TAU + time*0.3; ctx.beginPath(); ctx.arc(nx + Math.cos(a)*16, ny + Math.sin(a)*16, 1.3, 0, TAU); ctx.fill(); }
   }
-  blit(sp.side, 0, 0, 1);
+
+  /* --- Volumetric 3D Hull Extrusion (Topsides, Copper Bottom & Transom Stern) --- */
+  const L = T.len, W = T.wid;
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  const hullVerts = [
+    [ L*0.50,  0,          0.8 ], // 0: Cutwater bow stem
+    [ L*0.42,  W*0.28,     0.4 ], // 1: Starboard bow flare
+    [ L*0.24,  W*0.47,     0.1 ], // 2: Starboard forward shoulder
+    [ 0,       W*0.50,     0.0 ], // 3: Starboard midships
+    [-L*0.24,  W*0.48,     0.8 ], // 4: Starboard waist/quarter
+    [-L*0.42,  W*0.42,     2.2 ], // 5: Starboard stern quarter
+    [-L*0.50,  W*0.35,     3.2 ], // 6: Starboard transom corner
+    [-L*0.50, -W*0.35,     3.2 ], // 7: Port transom corner
+    [-L*0.42, -W*0.42,     2.2 ], // 8: Port stern quarter
+    [-L*0.24, -W*0.48,     0.8 ], // 9: Port waist/quarter
+    [ 0,      -W*0.50,     0.0 ], // 10: Port midships
+    [ L*0.24, -W*0.47,     0.1 ], // 11: Port forward shoulder
+    [ L*0.42, -W*0.28,     0.4 ]  // 12: Port bow flare
+  ];
+  const nVerts = hullVerts.length;
+  const p0 = new Array(nVerts), p1 = new Array(nVerts);
+  for (let i = 0; i < nVerts; i++){
+    const v = hullVerts[i], vx = v[0], vy = v[1], sb = v[2];
+    const x0 = vx * 0.95, y0 = vy * 0.83;
+    p0[i] = [ s.x + (ca * x0 - sa * y0) * scale, s.y + (sa * x0 + ca * y0) * scale ];
+    const hGunwale = hHull + sb * hh * scale;
+    const [lx, ly] = tip(hGunwale);
+    p1[i] = [ s.x + lx + (ca * vx - sa * vy) * scale, s.y + ly + (sa * vx + ca * vy) * scale ];
+  }
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  for (let i = 0; i < nVerts; i++){
+    const next = (i + 1) % nVerts;
+    const a0 = p0[i], b0 = p0[next], b1 = p1[next], a1 = p1[i];
+    const area = (b0[0]-a0[0])*(b0[1]+a0[1]) + (b1[0]-b0[0])*(b1[1]+b0[1]) + (a1[0]-b1[0])*(a1[1]+b1[1]) + (a0[0]-a1[0])*(a0[1]+a1[1]);
+    if (area <= 0) continue; // backface culled
+    const sx_ = b0[0] - a0[0], sy_ = b0[1] - a0[1];
+    const slen = Math.hypot(sx_, sy_) || 1;
+    const nx_ = sy_ / slen, ny_ = -sx_ / slen;
+    const dot = nx_ * -0.6 + ny_ * -0.8;
+    const lm = clamp(0.72 + dot * 0.38, 0.45, 1.25);
+    const col = shadeHex(s.hull, lm);
+
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.moveTo(a0[0], a0[1]); ctx.lineTo(b0[0], b0[1]); ctx.lineTo(b1[0], b1[1]); ctx.lineTo(a1[0], a1[1]);
+    ctx.closePath(); ctx.fill();
+
+    // Anti-fouling marine copper bottom plating (bottom 24% of flank)
+    const cA = [a0[0] + (a1[0]-a0[0])*0.24, a0[1] + (a1[1]-a0[1])*0.24];
+    const cB = [b0[0] + (b1[0]-b0[0])*0.24, b0[1] + (b1[1]-b0[1])*0.24];
+    ctx.fillStyle = shadeHex('#3a5446', lm * 0.95);
+    ctx.beginPath();
+    ctx.moveTo(a0[0], a0[1]); ctx.lineTo(b0[0], b0[1]); ctx.lineTo(cB[0], cB[1]); ctx.lineTo(cA[0], cA[1]);
+    ctx.closePath(); ctx.fill();
+
+    // Carvel wood planking strakes (horizontal seam lines)
+    ctx.strokeStyle = shadeHex(s.hull, lm * 0.65);
+    ctx.lineWidth = 0.5 * scale;
+    ctx.beginPath();
+    for (const frac of [0.48, 0.76]){
+      ctx.moveTo(a0[0] + (a1[0]-a0[0])*frac, a0[1] + (a1[1]-a0[1])*frac);
+      ctx.lineTo(b0[0] + (b1[0]-b0[0])*frac, b0[1] + (b1[1]-b0[1])*frac);
+    }
+    ctx.stroke();
+
+    // Painted Naval Band / Nelson Checker
+    if ((s.type === 'navy' || s.band) && (i < 6 || i > 6)){
+      ctx.fillStyle = s.type === 'navy' ? '#f0e6c8' : (s.band || '#e8dcc0');
+      ctx.beginPath();
+      ctx.moveTo(a0[0] + (a1[0]-a0[0])*0.50, a0[1] + (a1[1]-a0[1])*0.50);
+      ctx.lineTo(b0[0] + (b1[0]-b0[0])*0.50, b0[1] + (b1[1]-b0[1])*0.50);
+      ctx.lineTo(b0[0] + (b1[0]-b0[0])*0.70, b0[1] + (b1[1]-b0[1])*0.70);
+      ctx.lineTo(a0[0] + (a1[0]-a0[0])*0.70, a0[1] + (a1[1]-a0[1])*0.70);
+      ctx.closePath(); ctx.fill();
+    }
+
+    // Flank Gunports on warships
+    if (T.guns > 0 && (i === 2 || i === 3 || i === 4 || i === 9 || i === 10 || i === 11)){
+      const gmx = (a0[0] + b0[0] + a1[0] + b1[0]) * 0.25;
+      const gmy = (a0[1] + b0[1] + a1[1] + b1[1]) * 0.25;
+      const gsz = Math.min(slen * 0.35, 2.2 * scale);
+      ctx.fillStyle = '#141414'; ctx.fillRect(gmx - gsz*0.5, gmy - gsz*0.5, gsz, gsz);
+      ctx.fillStyle = '#7a1c18'; ctx.fillRect(gmx - gsz*0.4, gmy - gsz*0.4, gsz*0.8, gsz*0.8);
+    }
+
+    // Historic Carved Transom Stern (segment 6: starboard to port corner)
+    if (i === 6){
+      const nWin = T.len >= 66 ? 5 : 3;
+      for (let w = 0; w < nWin; w++){
+        const u = (w + 0.5) / nWin;
+        const wx = a0[0] + (b0[0]-a0[0])*u + (a1[0]-a0[0])*0.58;
+        const wy = a0[1] + (b0[1]-a0[1])*u + (a1[1]-a0[1])*0.58;
+        ctx.fillStyle = 'rgba(255, 222, 130, 0.9)';
+        ctx.fillRect(wx - 1.2*scale, wy - 1.4*scale, 2.4*scale, 2.8*scale);
+        ctx.strokeStyle = '#1a0e06'; ctx.lineWidth = 0.4*scale;
+        ctx.strokeRect(wx - 1.2*scale, wy - 1.4*scale, 2.4*scale, 2.8*scale);
+      }
+      ctx.strokeStyle = '#d8a834'; ctx.lineWidth = 0.8 * scale;
+      ctx.beginPath(); ctx.moveTo(a1[0], a1[1]); ctx.lineTo(b1[0], b1[1]); ctx.stroke();
+      const rTop = [(a1[0]+b1[0])*0.5, (a1[1]+b1[1])*0.5];
+      const rBot = [(a0[0]+b0[0])*0.5, (a0[1]+b0[1])*0.5 + 2.5*scale];
+      ctx.strokeStyle = '#221208'; ctx.lineWidth = 1.6 * scale;
+      ctx.beginPath(); ctx.moveTo(rTop[0], rTop[1]); ctx.lineTo(rBot[0], rBot[1]); ctx.stroke();
+    }
+  }
+  ctx.restore();
+
   blit(sp.hull, dx3, dy3, 1);
   if (s.flash > 0) blit(sp.flash, dx3, dy3, 0.65*clamp(s.flash/0.15, 0, 1));
   // shot holes
@@ -5927,7 +6032,6 @@ function drawShip(s, alpha=1, scale=1, tilt=0, sailA=1){
     ctx.restore(); ctx.globalAlpha = 1;
   }
   // masts rise from the deck to the tops
-  const ca = Math.cos(ang), sa = Math.sin(ang);
   const pole = (fx, fy, ax, ay, bx, by, wd) => {
     ctx.lineCap = 'round';
     ctx.strokeStyle = '#2e1c0c'; ctx.lineWidth = wd*scale;
@@ -7069,7 +7173,7 @@ function drawCanopies(is){
 }
 
 function drawIslandFallback(is){
-  // Base lush natural landmass
+  // Base lush natural landmass at waterline
   ctx.fillStyle = is.volc ? '#382c26' : '#2d6824';
   ctx.beginPath();
   is.pts.forEach(([px, py], i) => i ? ctx.lineTo(is.x + px, is.y + py) : ctx.moveTo(is.x + px, is.y + py));
@@ -7087,17 +7191,53 @@ function drawIslandFallback(is){
     }
   }
 
-  // 3D elevated mountain / volcano peak with perspective lean
-  if (is.big){
-    const [ox, oy] = lean(is.x, is.y, 24);
-    ctx.fillStyle = is.volc ? '#1f1611' : '#1e4818';
+  // 3D elevated mountain / volcano peak with perspective lean & multi-tier terrain
+  if (is.big || is.volc || is.R > 80){
+    const peakH = is.volc ? 38 : is.big ? 32 : 18;
+    const [ox1, oy1] = lean(is.x, is.y, peakH * 0.45);
+    const [ox2, oy2] = lean(is.x, is.y, peakH);
+
+    // Mid-tier plateau / mountain flank
+    ctx.fillStyle = is.volc ? '#2c221c' : '#23521c';
     ctx.beginPath();
     is.pts.forEach(([px, py], i) => {
-      const pScale = 0.50;
-      const gx = is.x + ox + px*pScale, gy = is.y + oy + py*pScale;
+      const pScale = 0.65;
+      const gx = is.x + ox1 + px*pScale, gy = is.y + oy1 + py*pScale;
       i ? ctx.lineTo(gx, gy) : ctx.moveTo(gx, gy);
     });
     ctx.closePath(); ctx.fill();
+
+    // High rocky summit crag with directional light
+    ctx.fillStyle = is.volc ? '#1f1611' : '#1b4416';
+    ctx.beginPath();
+    is.pts.forEach(([px, py], i) => {
+      const pScale = 0.42;
+      const gx = is.x + ox2 + px*pScale, gy = is.y + oy2 + py*pScale;
+      i ? ctx.lineTo(gx, gy) : ctx.moveTo(gx, gy);
+    });
+    ctx.closePath(); ctx.fill();
+
+    // South-facing shaded rock cliff drop
+    ctx.fillStyle = is.volc ? '#140e0a' : '#142c12';
+    ctx.beginPath();
+    for (let i = 0; i < len; i += 4){
+      const [px, py] = is.pts[i];
+      if (py > 0){ // south-facing
+        const g0x = is.x + ox1 + px*0.65, g0y = is.y + oy1 + py*0.65;
+        const g1x = is.x + ox2 + px*0.42, g1y = is.y + oy2 + py*0.42;
+        i === 0 ? ctx.moveTo(g0x, g0y) : ctx.lineTo(g0x, g0y);
+        ctx.lineTo(g1x, g1y);
+      }
+    }
+    ctx.fill();
+
+    // Volcano summit crater glow
+    if (is.volc){
+      ctx.fillStyle = '#ff6a18';
+      ell(is.x + ox2, is.y + oy2, is.R * 0.12, is.R * 0.08);
+      ctx.fillStyle = '#ffe040';
+      ell(is.x + ox2, is.y + oy2, is.R * 0.06, is.R * 0.04);
+    }
   }
 }
 window.drawIslandFallback = drawIslandFallback;
@@ -7105,8 +7245,8 @@ window.drawIslandFallback = drawIslandFallback;
 function render(){
   const z = cam.z, S = DPR;
   const sx = shake ? rand(-shake, shake) : 0, sy = shake ? rand(-shake, shake) : 0;
-  ctx.setTransform(z*S, 0, 0, z*S, (VW/2 - cam.x*z + sx)*S, (VH/2 - cam.y*z + sy)*S);
-  vw = VW/z; vh = VH/z; vx0 = cam.x - vw/2; vy0 = cam.y - vh/2;
+  ctx.setTransform(z*S, 0, 0, z*S*PITCH_Y, (VW/2 - cam.x*z + sx)*S, (VH/2 - cam.y*z*PITCH_Y + sy)*S);
+  vw = VW/z; vh = VH/(z*PITCH_Y); vx0 = cam.x - vw/2; vy0 = cam.y - vh/2;
 
   drawWater();
   ctx.fillStyle = 'rgba(0,8,22,0.55)';
@@ -7176,6 +7316,30 @@ function render(){
     } else {
       drawIslandFallback(is);
     }
+    // 3D elevated mountain ridges & volcanic caldera peaks with 15° perspective lean
+    if ((is.big || is.volc) && is.pts && is.pts.length){
+      const peakH = is.volc ? 36 : 28;
+      const [ox, oy] = lean(is.x, is.y, peakH);
+      // South-facing shaded rock cliff drop
+      ctx.fillStyle = is.volc ? 'rgba(26,18,14,0.72)' : 'rgba(20,38,18,0.65)';
+      ctx.beginPath();
+      const pScale = 0.52;
+      is.pts.forEach(([px, py], i) => {
+        const gx = is.x + ox + px*pScale, gy = is.y + oy + py*pScale;
+        i ? ctx.lineTo(gx, gy) : ctx.moveTo(gx, gy);
+      });
+      ctx.closePath(); ctx.fill();
+
+      // Elevated mountain summit crag
+      ctx.fillStyle = is.volc ? '#2c1e16' : '#2d5422';
+      ctx.beginPath();
+      const sScale = 0.38;
+      is.pts.forEach(([px, py], i) => {
+        const gx = is.x + ox*1.2 + px*sScale, gy = is.y + oy*1.2 + py*sScale;
+        i ? ctx.lineTo(gx, gy) : ctx.moveTo(gx, gy);
+      });
+      ctx.closePath(); ctx.fill();
+    }
   }
 
   // Organic coastal shorewash foam: breaks naturally along windward beaches and rocky points
@@ -7213,12 +7377,26 @@ function render(){
     // Dark sea-contact shadow
     ctx.fillStyle = 'rgba(0,18,30,0.38)';
     ell(r.x + rkH*0.25, r.y + rkH*0.35, r.r*1.15, r.r*0.85);
-    // Vertical sea-stack cliff facets
-    ctx.fillStyle = '#22252a';
-    ctx.beginPath();
-    ctx.arc(r.x, r.y, r.r * 0.95, 0, TAU);
-    ctx.arc(r.x + ox, r.y + oy, r.r * 0.95, 0, TAU);
-    ctx.fill();
+
+    // Multi-faceted 3D vertical granite cliff walls with directional sunlight
+    const nFacets = 8;
+    for (let f = 0; f < nFacets; f++){
+      const a0 = f * TAU / nFacets, a1 = (f + 1) * TAU / nFacets;
+      const b0x = r.x + Math.cos(a0) * r.r * 0.92, b0y = r.y + Math.sin(a0) * r.r * 0.92;
+      const b1x = r.x + Math.cos(a1) * r.r * 0.92, b1y = r.y + Math.sin(a1) * r.r * 0.92;
+      const t0x = b0x + ox, t0y = b0y + oy;
+      const t1x = b1x + ox, t1y = b1y + oy;
+      const fArea = (b1x - b0x)*(b1y + b0y) + (t1x - b1x)*(t1y + b1y) + (t0x - t1x)*(t0y + t1y) + (b0x - t0x)*(b0y + t0y);
+      if (fArea <= 0) continue; // backface culled
+      const midA = (a0 + a1) * 0.5;
+      const fnx = Math.cos(midA), fny = Math.sin(midA);
+      const fDot = fnx * -0.6 + fny * -0.8;
+      const fCol = shadeHex('#32353a', clamp(0.72 + fDot * 0.42, 0.45, 1.28));
+      ctx.fillStyle = fCol;
+      ctx.beginPath();
+      ctx.moveTo(b0x, b0y); ctx.lineTo(b1x, b1y); ctx.lineTo(t1x, t1y); ctx.lineTo(t0x, t0y);
+      ctx.closePath(); ctx.fill();
+    }
     // Sunlit top crag summit with perspective offset
     ctx.drawImage(r.cv, r.x + ox - r.ext, r.y + oy - r.ext, r.ext*2, r.ext*2);
     // Directional windward tidal wash (no concentric circle)
