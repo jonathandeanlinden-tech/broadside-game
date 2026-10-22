@@ -1063,7 +1063,7 @@ const VO = (() => {
 /* =========================================================
    WORLD
    ========================================================= */
-const IRES = 1.0;
+const IRES = 1.6;
 const WORLD = 15600, CX = WORLD/2, CY = WORLD/2;
 const PRE = ['Skull','Turtle','Barnacle','Parrot','Rum','Gull','Coconut',"Dead Man's","Smuggler's",'Mango','Kraken','Lantern','Sharkfin','Pelican',
   'Cutlass','Mermaid','Coral','Bonny','Galleon',"Hangman's",'Siren','Doubloon','Crab','Monkey','Tortuga','Black','Driftwood','Hurricane','Whale','Corsair','Lobster','Bounty'];
@@ -1146,10 +1146,10 @@ function makeIsland(x, y, R0, name, opt={}){
   for (let i = 0; i < nh; i++) h.push({ f: i+2, a: (opt.big ? srnd(0.05,0.15)/(i*0.45+1) : srnd(0.04,0.15)/(i*0.6+1))*(calm ? 0.55 : 1), p: srnd(0,TAU) });
   const is = { x, y, R: R0, h, pts: [], max: 0, trees: [], structs: [], boulders: [], paths: [], fires: [], name,
     port: !!opt.port, city: !!opt.city, home: !!opt.home, big: !!opt.big, berths: [], camp: null,
-    shelfW: opt.big ? 260 : 85 + R0*0.42, res: opt.big ? 0.85 : IRES,
+    shelfW: opt.big ? 260 : 85 + R0*0.42, res: opt.big ? 1.25 : IRES,
     el: opt.el || 0, erot: srnd(0, Math.PI), mtn: srnd(0.8, 1.15), volc: !!opt.volc };
-  for (let i = 0; i < 128; i++){
-    const a = i/128*TAU, r = islR(is, a);
+  for (let i = 0; i < 256; i++){
+    const a = i/256*TAU, r = islR(is, a);
     is.pts.push([Math.cos(a)*r, Math.sin(a)*r]); is.max = Math.max(is.max, r);
   }
   if (is.volc){
@@ -1441,6 +1441,7 @@ function drawFacetRock(g, x, y, r, seed, foam){
   }
   g.fillStyle = 'rgba(0,12,22,0.42)'; poly(1, r*0.22, r*0.3); g.fill();
   g.fillStyle = '#2a2e35'; poly(1); g.fill();
+  g.strokeStyle = '#1b1d22'; g.lineWidth = Math.max(0.6, r*0.06); poly(1); g.stroke();
   const ax = x - r*0.18, ay = y - r*0.22;
   for (let i = 0; i < n; i++){
     const [p0x,p0y] = pts[i], [p1x,p1y] = pts[(i+1)%n];
@@ -1448,7 +1449,7 @@ function drawFacetRock(g, x, y, r, seed, foam){
     const lit = 0.5 + 0.5*Math.cos(m + 2.36), v = 46 + lit*92 + (rr()-0.5)*14;
     g.fillStyle = `rgb(${v|0},${(v+4)|0},${(v+12)|0})`;
     g.beginPath(); g.moveTo(ax, ay); g.lineTo(p0x, p0y); g.lineTo(p1x, p1y); g.closePath(); g.fill();
-    g.strokeStyle = 'rgba(18,20,26,0.55)'; g.lineWidth = Math.max(0.3, r*0.035); g.stroke();
+    g.strokeStyle = 'rgba(18,20,26,0.65)'; g.lineWidth = Math.max(0.45, r*0.04); g.stroke();
   }
   g.fillStyle = 'rgba(190,196,206,0.55)';
   g.beginPath(); pts.forEach(([px,py],i) => { const qx = ax + (px-x)*0.3, qy = ay + (py-y)*0.3; i ? g.lineTo(qx,qy) : g.moveTo(qx,qy); }); g.closePath(); g.fill();
@@ -1695,22 +1696,15 @@ function* bakeIslandGen(is){
   }
   g.setTransform(RES, 0, 0, RES, ext*RES, ext*RES);
   const dr = mulberry(Math.floor(is.x*13 + is.y*7));
-  // 2K+ High-definition botanical flora: curved multi-blade grass tufts, 5-petal tropical blossoms & lush clover groundcover
+  // Lush natural tropical grass tufts, clovers, ferns and jungle groundcover (all flowers removed)
   const nF = Math.min(8000, Math.round(is.R*is.R/20));
-  const flowerCols = [
-    { petals: '#e52b38', inner: '#7a0a14', eye: '#ffea3a' }, // Tropical Hibiscus Red
-    { petals: '#fdfbf7', inner: '#ffd23f', eye: '#e87b00' }, // Plumeria / Frangipani Ivory-Gold
-    { petals: '#d92b8a', inner: '#6b0838', eye: '#fff366' }, // Bougainvillea Fuchsia
-    { petals: '#ff9800', inner: '#b24700', eye: '#ffe57f' }, // Golden Marigold
-    { petals: '#3e84f5', inner: '#1a3ea8', eye: '#ffffff' }  // Azure Periwinkle
-  ];
   for (let k = 0; k < nF; k++){
     if ((k & 255) === 0) yield;
     const a = dr()*TAU, maxR = islR(is, a), rr = Math.sqrt(dr())*(is.big ? maxR - 45 : maxR*0.75), x = Math.cos(a)*rr, y = Math.sin(a)*rr;
     if (is.big && ridgeH(is, is.x + x, is.y + y) > 1.6){ dr(); dr(); continue; }
     const kind = dr();
-    if (kind < 0.60){
-      // Multi-blade curved grass tuft with contact shadow and botanical highlights
+    if (kind < 0.62){
+      // Multi-blade curved grass tuft with contact shadow and natural green highlights
       const blades = 3 + ((dr()*3)|0);
       const th = 2.0 + dr()*1.6;
       const lean = (dr() - 0.5)*1.2;
@@ -1724,41 +1718,19 @@ function* bakeIslandGen(is){
         const cpy = y - th*0.45;
         g.strokeStyle = '#1b4a18'; g.lineWidth = 0.75;
         g.beginPath(); g.moveTo(x + bf*0.6, y); g.quadraticCurveTo(cpx, cpy, tx, ty); g.stroke();
-        g.strokeStyle = ['#327726','#4ba332','#6ec238','#94de42'][(dr()*4)|0]; g.lineWidth = 0.5;
+        g.strokeStyle = ['#327726','#4ba332','#5eb834','#7ecb38'][(dr()*4)|0]; g.lineWidth = 0.5;
         g.beginPath(); g.moveTo(x + bf*0.5, y); g.quadraticCurveTo(cpx, cpy, tx, ty); g.stroke();
       }
-    } else if (kind < 0.82){
-      // Botanical tropical flower cluster with 5 distinct petals and center stamen
-      const fspec = flowerCols[(dr()*flowerCols.length)|0];
-      const count = 1 + ((dr()*2.5)|0);
-      for (let c = 0; c < count; c++){
-        const fx = x + (dr()-0.5)*4.5, fy = y + (dr()-0.5)*4.5;
-        g.fillStyle = 'rgba(25,65,20,0.7)';
-        for (let l = 0; l < 3; l++){
-          const la = l*2.1 + dr()*0.4;
-          g.beginPath(); g.ellipse(fx + Math.cos(la)*1.4, fy + Math.sin(la)*1.4, 1.2, 0.6, la, 0, TAU); g.fill();
-        }
-        const pRot = dr()*TAU, pr = 1.1 + dr()*0.5;
-        g.fillStyle = fspec.petals;
-        for (let p = 0; p < 5; p++){
-          const pa = pRot + p*TAU/5;
-          g.beginPath(); g.ellipse(fx + Math.cos(pa)*pr, fy + Math.sin(pa)*pr, pr*0.75, pr*0.55, pa, 0, TAU); g.fill();
-        }
-        g.fillStyle = fspec.inner;
-        g.beginPath(); g.arc(fx, fy, 0.6, 0, TAU); g.fill();
-        g.fillStyle = fspec.eye;
-        g.beginPath(); g.arc(fx, fy, 0.35, 0, TAU); g.fill();
-      }
     } else {
-      // Clover / jungle leaf ground cover
-      const leaflets = 3 + (dr() < 0.25 ? 1 : 0);
-      const cRot = dr()*TAU, cr = 1.2 + dr()*0.6;
-      g.fillStyle = ['#286b22','#378a2e','#49a838'][(dr()*3)|0];
+      // Natural jungle leaf / clover ground cover (pure natural foliage greens, zero flower petals)
+      const leaflets = 3 + (dr() < 0.35 ? 1 : 0);
+      const cRot = dr()*TAU, cr = 1.2 + dr()*0.7;
+      g.fillStyle = ['#225d1c','#2f7c27','#419432','#52ab3c'][(dr()*4)|0];
       for (let l = 0; l < leaflets; l++){
         const la = cRot + l*TAU/leaflets;
         g.beginPath(); g.ellipse(x + Math.cos(la)*cr, y + Math.sin(la)*cr, cr*0.65, cr*0.5, la, 0, TAU); g.fill();
       }
-      g.fillStyle = '#184714';
+      g.fillStyle = '#164213';
       g.beginPath(); g.arc(x, y, 0.45, 0, TAU); g.fill();
     }
   }
@@ -1884,9 +1856,9 @@ function bakePalm(seed){
   return { c, sh: silhouette(c, '#001a00', 6), size: 36 };
 }
 
-const RRES = 1.2;
+const RRES = 3.6;
 function bakeRock(rk){
-  const ext = rk.r*2.4, [c, g] = mkCanvas(ext*2, ext*2, RRES);
+  const ext = Math.ceil(rk.r*2.5 + 4), [c, g] = mkCanvas(ext*2, ext*2, RRES);
   drawFacetRock(g, 0, 0, rk.r, rk.seed, true);
   rk.cv = c; rk.ext = ext;
 }
@@ -7003,24 +6975,25 @@ function render(){
     } else {
       drawIslandFallback(is);
     }
+    // Anti-aliased sandy shoreline border: eliminates any raster staircase at the water line
+    ctx.strokeStyle = '#e2b87a';
+    ctx.lineWidth = 2.4;
+    ringPath(is.pts, is.x, is.y, 1.0);
+    ctx.stroke();
   }
   for (const is of visIs){
     const lap = (Math.sin(time*1.1 + is.x*0.01) + 1)/2;
-    ctx.strokeStyle = `rgba(255,255,255,${0.55 + 0.3*lap})`; ctx.lineWidth = 2.6;
-    ringPath(is.pts, is.x, is.y, 1 + (4 + lap*4)/is.R); ctx.stroke();
+    ctx.strokeStyle = `rgba(255,255,255,${0.55 + 0.3*lap})`; ctx.lineWidth = 2.4;
+    ringPath(is.pts, is.x, is.y, 1 + (3 + lap*3.5)/is.R); ctx.stroke();
     if (graphicsMode === 'high'){
       const ph = (time*0.18 + is.y*0.0013) % 1;
       ctx.strokeStyle = `rgba(255,255,255,${(1-ph)*0.35})`; ctx.lineWidth = 1.4;
-      ringPath(is.pts, is.x, is.y, 1 + (8 + ph*18)/is.R); ctx.stroke();
+      ringPath(is.pts, is.x, is.y, 1 + (7 + ph*15)/is.R); ctx.stroke();
     }
   }
-  let rocksBaked = 0;
   for (const r of rocks){
     if (!vis(r.x, r.y, r.r*2.6)) continue;
-    if (!r.cv){
-      if (rocksBaked < 1){ bakeRock(r); rocksBaked++; }
-      else continue;
-    }
+    if (!r.cv) bakeRock(r);
     ctx.drawImage(r.cv, r.x - r.ext, r.y - r.ext, r.ext*2, r.ext*2);
     if (graphicsMode === 'high'){
       const ph = (time*0.4 + r.y*0.01) % 1;
