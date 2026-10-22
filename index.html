@@ -5096,7 +5096,33 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyM'){ muted = !muted; if (bgmAudio) bgmAudio.volume = muted ? 0 : (musicEnabled ? bgmBaseVol : 0); }
   else if (e.code === 'KeyN' && state === 'play' && !menu){ musicEnabled = !musicEnabled; if (!musicEnabled && bgmAudio) bgmAudio.pause(); else if (musicEnabled && bgmAudio) bgmAudio.play().catch(()=>{}); msg(musicEnabled ? 'MUSIC ON' : 'MUSIC MUTED', '#ffd23f', 1.2); }
   if (e.code === 'KeyK'){ manualSave(); return; }
-  if (e.code === 'Digit0' || e.code === 'Numpad0'){ userZoom = 1.0; zoomDisplayT = 3.0; }
+  if (e.code === 'KeyZ'){
+    copyZoomCalibrations();
+    zoomDisplayT = 4.5;
+    return;
+  }
+  if (e.code === 'Digit0' || e.code === 'Numpad0'){
+    const curKey = getActiveZoomKey();
+    zoomLevels[curKey] = zoomDefaults[curKey];
+    saveZoomLevels();
+    zoomDisplayT = 3.5;
+    msg('RESET ' + getActiveZoomLabel(curKey) + ' TO ' + Math.round(zoomDefaults[curKey]*100) + '%', '#ffd23f', 1.8);
+    return;
+  }
+  if (e.code === 'Equal' || e.code === 'NumpadAdd' || e.code === 'BracketRight'){
+    const curKey = getActiveZoomKey();
+    zoomLevels[curKey] = clamp(Math.round((zoomLevels[curKey] + 0.05) * 100) / 100, 0.35, 4.00);
+    saveZoomLevels();
+    zoomDisplayT = 4.0;
+    return;
+  }
+  if (e.code === 'Minus' || e.code === 'NumpadSubtract' || e.code === 'BracketLeft'){
+    const curKey = getActiveZoomKey();
+    zoomLevels[curKey] = clamp(Math.round((zoomLevels[curKey] - 0.05) * 100) / 100, 0.35, 4.00);
+    saveZoomLevels();
+    zoomDisplayT = 4.0;
+    return;
+  }
   if (paused) return;
   if (e.code === 'KeyF') interact();
   if (e.code === 'KeyR') fishKey();
@@ -5112,23 +5138,93 @@ addEventListener('beforeunload', e => {   // Ctrl+W while parrying would close t
 });
 cv.addEventListener('pointerdown', e => {
   audioInit(); if (state === 'title'){ startGame(); return; }
+  const U = Math.min(VW, VH)/720;
+  const bw = Math.min(540*U, VW - 40), bh = 54*U, bx = VW/2 - bw/2, by = 16*U;
+  if (zoomDisplayT > 0 && e.clientX >= bx && e.clientX <= bx + bw && e.clientY >= by && e.clientY <= by + bh){
+    copyZoomCalibrations();
+    return;
+  }
   if (menu && menu.yard){
     const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
     for (const h of menu.yard.hits) if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h){ h.fn(); return; }
   }
 });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
-let userZoom = 1.0;
+
+const zoomDefaults = {
+  stationary: 1.50, // 150%
+  moving:     0.76, // 76%
+  deck:       2.20, // 220%
+  land:       0.76  // 76%
+};
+const zoomLevels = { ...zoomDefaults };
+try {
+  const saved = localStorage.getItem('broadside.mini.zoomLevels');
+  if (saved){
+    const obj = JSON.parse(saved);
+    if (obj && typeof obj === 'object') Object.assign(zoomLevels, obj);
+  }
+} catch(e){}
+
+function saveZoomLevels(){
+  try { localStorage.setItem('broadside.mini.zoomLevels', JSON.stringify(zoomLevels)); } catch(e){}
+}
+
+function getActiveZoomKey(){
+  if (mode === 'deck') return 'deck';
+  if (mode === 'foot') return 'land';
+  const spd = Math.abs(player.v || 0);
+  return spd > 8 ? 'moving' : 'stationary';
+}
+
+function getActiveZoomLabel(key){
+  if (key === 'deck') return 'DECK COMBAT';
+  if (key === 'land') return 'WALKING ON LAND';
+  if (key === 'moving') return 'MOVING SHIP';
+  return 'STATIONARY SHIP';
+}
+
+function copyZoomCalibrations(){
+  const text = `Stationery Ship: ${Math.round(zoomLevels.stationary * 100)}%\nMoving Ship: ${Math.round(zoomLevels.moving * 100)}%\nFighting on the deck, Zoom: ${Math.round(zoomLevels.deck * 100)}%\nWalking On Land: ${Math.round(zoomLevels.land * 100)}%`;
+  if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(() => {
+      msg('COPIED CALIBRATIONS TO CLIPBOARD!', '#7dff5a', 2.2);
+    }).catch(() => fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
+  }
+  function fallbackCopy(str){
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = str; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+      document.body.removeChild(ta);
+      msg('COPIED CALIBRATIONS TO CLIPBOARD!', '#7dff5a', 2.2);
+    } catch(err){
+      msg('ZOOMS: ' + text.replace(/\n/g, ' | '), '#ffd23f', 4.0);
+    }
+  }
+}
+
 let zoomDisplayT = 0;
 window.addEventListener('wheel', e => {
   if (state !== 'play') return;
   e.preventDefault();
-  const step = e.deltaY < 0 ? 1.06 : 0.94;
-  userZoom = clamp(Math.round(userZoom * step * 100) / 100, 0.40, 3.00);
-  zoomDisplayT = 3.5;
+  const curKey = getActiveZoomKey();
+  const dir = e.deltaY < 0 ? 0.05 : -0.05; // 5% per scroll click
+  zoomLevels[curKey] = clamp(Math.round((zoomLevels[curKey] + dir) * 100) / 100, 0.35, 4.00);
+  saveZoomLevels();
+  zoomDisplayT = 4.5;
 }, { passive: false });
+
 window.addEventListener('auxclick', e => {
-  if (e.button === 1){ userZoom = 1.0; zoomDisplayT = 3.0; } // Middle click resets zoom to 100%
+  if (e.button === 1){
+    const curKey = getActiveZoomKey();
+    zoomLevels[curKey] = zoomDefaults[curKey];
+    saveZoomLevels();
+    zoomDisplayT = 3.5;
+    msg('RESET ' + getActiveZoomLabel(curKey) + ' TO ' + Math.round(zoomDefaults[curKey]*100) + '%', '#ffd23f', 1.8);
+  }
 });
 
 function startGame(){
@@ -5598,30 +5694,30 @@ function update(dt){
 
   // camera: zooms out the faster you sail with user-calibrated presets
   const baseZ = clamp(Math.min(VW, VH)/380, 0.95, 2.6);
-  const uZ = typeof userZoom !== 'undefined' ? userZoom : 1.0;
   if (state !== 'play'){
-    cam.x = CX + 220 + Math.cos(time*0.08)*300; cam.y = CY - 40 + Math.sin(time*0.08)*300; cam.z = baseZ*0.8*uZ;
+    cam.x = CX + 220 + Math.cos(time*0.08)*300; cam.y = CY - 40 + Math.sin(time*0.08)*300; cam.z = baseZ*0.85;
   } else if (mode === 'deck' && deck){
     const k = Math.min(1, dt*4);
     cam.x += ((hero.x + deck.ship.x)/2 - cam.x)*k; cam.y += ((hero.y + deck.ship.y)/2 - cam.y)*k;
-    // Fighting on the deck: User calibrated zoom to 220%
-    cam.z += (baseZ * 2.5 * 2.20 * uZ - cam.z)*Math.min(1, dt*2.5);
+    // Fighting on the deck: True linear zoom percentage
+    const targetZ = baseZ * zoomLevels.deck;
+    cam.z += (targetZ - cam.z)*Math.min(1, dt*3.0);
   } else if (mode === 'foot'){
     const k = Math.min(1, dt*5);
     cam.x += (hero.x - cam.x)*k; cam.y += (hero.y - cam.y)*k;
-    // Walking On Land: User calibrated zoom to 76%
-    cam.z += (baseZ * 1.62 * 0.76 * uZ - cam.z)*Math.min(1, dt*2.5);
+    // Walking On Land: True linear zoom percentage
+    const targetZ = baseZ * zoomLevels.land;
+    cam.z += (targetZ - cam.z)*Math.min(1, dt*3.0);
   } else {
     const spd = Math.min(1, Math.abs(player.v)/player.T.maxv);
     const tx = player.x + Math.cos(player.a)*player.v*1.1, ty = player.y + Math.sin(player.a)*player.v*1.1;
     const k = Math.min(1, dt*2.5);
     cam.x += (tx - cam.x)*k; cam.y += (ty - cam.y)*k;
-    // Sea mode: Stationery Ship = 150%, Moving Ship = 76% (smooth dynamic speed transition)
-    const hullFactor = player.dinghy ? 1.9 : clamp(Math.pow(46/player.T.len, 0.45), 0.62, 1.08);
-    const movingMult = player.dinghy ? (1 - 0.2*spd) : (1 - 0.36*spd);
-    const seaMult = 1.50 - (1.50 - movingMult * 0.76) * spd;
-    const tz = baseZ * seaMult * hullFactor * uZ;
-    cam.z += (tz - cam.z)*Math.min(1, dt*1.2);
+    // Sea mode: True linear zoom blend between stationary and moving
+    const seaMult = zoomLevels.stationary - (zoomLevels.stationary - zoomLevels.moving) * spd;
+    const dinghyFactor = player.dinghy ? 1.4 : 1.0;
+    const targetZ = baseZ * seaMult * dinghyFactor;
+    cam.z += (targetZ - cam.z)*Math.min(1, dt*2.0);
   }
   shake = Math.max(0, shake - dt*15);
 }
@@ -7251,32 +7347,22 @@ function drawHUD(){
   for (let i = 0; i < 5; i++) drawStar(VW - m - 12*U - (4 - i)*26*U, m + 60*U, 10*U, i < player.wanted, hunted && Math.sin(time*10) > 0);
   if (player.wanted > 0 && !hunted && Math.sin(time*4) > -0.3) otext(mode === 'foot' ? 'HIDING... NAVY SEARCHING' : 'NAVY SEARCHING...', VW - m, m + 96*U, '#6fa8ff', Math.round(13*U), 'right');
   otext(`SUNK ${kills}   ${player.dinghy ? 'DINGHY' : HULLS[prog.hull].name}`, VW - m, m + 76*U, '#ffffff', Math.round(15*U), 'right');
-  let modeLabel = '';
-  let basePct = 100;
-  if (mode === 'deck'){
-    modeLabel = 'DECK';
-    basePct = 220;
-  } else if (mode === 'foot'){
-    modeLabel = 'LAND';
-    basePct = 76;
-  } else {
-    const spd = Math.min(1, Math.abs(player.v)/(player.T.maxv || 1));
-    modeLabel = spd > 0.08 ? 'MOVING' : 'STATIONARY';
-    basePct = Math.round(150 - (150 - 76) * spd);
-  }
-  const zPct = Math.round(basePct * userZoom);
-  const customStr = userZoom !== 1.0 ? ` (${Math.round(userZoom*100)}%)` : '';
-  otext(`🔍 ZOOM: ${zPct}% [${modeLabel}]`, VW - m, m + 116*U, (zoomDisplayT > 0 || userZoom !== 1.0) ? '#ffdd44' : '#88aacc', Math.round(13*U), 'right');
+  const curKey = getActiveZoomKey();
+  const curLabel = getActiveZoomLabel(curKey);
+  const curVal = Math.round(zoomLevels[curKey] * 100);
+  otext(`🔍 ZOOM: ${curVal}% [${curLabel}]`, VW - m, m + 116*U, zoomDisplayT > 0 ? '#ffdd44' : '#88aacc', Math.round(13*U), 'right');
   if (zoomDisplayT > 0){
-    const bw = 210*U, bh = 34*U, bx = VW/2 - bw/2, by = 18*U;
+    const bw = Math.min(540*U, VW - 40), bh = 54*U, bx = VW/2 - bw/2, by = 16*U;
     ctx.save();
-    ctx.fillStyle = 'rgba(6, 18, 34, 0.88)';
+    ctx.fillStyle = 'rgba(6, 18, 34, 0.94)';
     ctx.strokeStyle = '#00f0ff';
-    ctx.lineWidth = 1.6;
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, 6); else ctx.rect(bx, by, bw, bh);
+    if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, 8); else ctx.rect(bx, by, bw, bh);
     ctx.fill(); ctx.stroke();
-    otext(`🔍 ZOOM: ${zPct}% [${modeLabel}]${customStr}`, VW/2, by + 7*U, '#00f0ff', Math.round(15*U), 'center');
+    otext(`🔍 ZOOM CALIBRATION: ${curLabel} = ${curVal}%`, VW/2, by + 6*U, '#ffdd44', Math.round(15*U), 'center');
+    const sumLine = `Stat: ${Math.round(zoomLevels.stationary*100)}% | Move: ${Math.round(zoomLevels.moving*100)}% | Deck: ${Math.round(zoomLevels.deck*100)}% | Land: ${Math.round(zoomLevels.land*100)}%`;
+    otext(`${sumLine}  •  [Scroll to tune | '0' reset | 'Z' or Click to copy]`, VW/2, by + 28*U, '#00f0ff', Math.round(11*U), 'center');
     ctx.restore();
   }
   let ny = m;
