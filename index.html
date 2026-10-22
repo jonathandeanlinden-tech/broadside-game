@@ -1201,6 +1201,8 @@ function makeIsland(x, y, R0, name, opt={}){
     const px = Math.cos(aPort)*rPort, py = Math.sin(aPort)*rPort;
     is.structs.push({ kind:'market', x: px - 18, y: py - 12, w:34, h:22, rot: aPort, label:'HARBOUR MARKET' });
     is.structs.push({ kind:'shipwright', x: px + 18, y: py + 12, w:44, h:28, rot: aPort, label:'SHORELINE SHIPWRIGHT' });
+    const aLight = aPort + 1.25, rLight = islR(is, aLight)*0.82;
+    is.structs.push({ kind:'lighthouse', x: Math.cos(aLight)*rLight, y: Math.sin(aLight)*rLight, w:20, h:20, rot: aLight, label:'PORT ROYAL LIGHT' });
     is.piers = [{ x: px, y: py, a: aPort, len: 45, wid: 14 }];
     for (const [hx, hy, rot] of [[-72,-34,0.2],[-18,-78,-0.1],[22,74,0.15],[82,38,-0.25],[-96,54,0.1],[-4,-22,0.35],[60,-92,0.05],[-60,100,-0.2]]){
       is.structs.push({ kind:'house', x:hx, y:hy, w:22, h:18, rot, roof: seedR() < 0.5 ? '#b5523a' : '#8f6a3e' });
@@ -1213,6 +1215,8 @@ function makeIsland(x, y, R0, name, opt={}){
     const px = Math.cos(aPort)*rPort, py = Math.sin(aPort)*rPort;
     is.structs.push({ kind:'market', x:-70, y:66, w:42, h:26, rot:0, label:'MARKET' });
     is.structs.push({ kind:'shipwright', x: px, y: py, w:54, h:32, rot: aPort, label:'SHORELINE SHIPWRIGHT' });
+    const aLight = aPort - 1.15, rLight = islR(is, aLight)*0.84;
+    is.structs.push({ kind:'lighthouse', x: Math.cos(aLight)*rLight, y: Math.sin(aLight)*rLight, w:22, h:22, rot: aLight, label: opt.capital ? "ROYAL LIGHTHOUSE" : 'CITADEL LIGHT' });
     is.piers = [{ x: px, y: py, a: aPort, len: 52, wid: 16 }];
     is.structs.push({ kind:'fort', x:-150, y:-130, w:76, h:76, rot:0.08, label:'NAVY FORT' });
     is.structs.push({ kind:'tavern', x:46, y:104, w:38, h:26, rot:0, label:'TAVERN' });
@@ -1243,6 +1247,8 @@ function makeIsland(x, y, R0, name, opt={}){
     for (const a of [0.5, 1.9, 3.3, 4.6]) addPath(0, 0, a);
   } else if (opt.home){
     is.structs.push({ kind:'shack', x:-6, y:-8, w:28, h:20, rot:0.2, label:'HIDEOUT' });
+    const aLight = 0.2 + 2.3, rLight = islR(is, aLight)*0.76;
+    is.structs.push({ kind:'lighthouse', x: Math.cos(aLight)*rLight, y: Math.sin(aLight)*rLight, w:18, h:18, rot: aLight, label:'BEACON TOWER' });
     is.fires.push({ x: is.x + 22, y: is.y + 16 });
     addPath(-6, -8, 0.2);
     for (let k = 0; k < 4; k++){
@@ -1630,22 +1636,30 @@ function* bakeIslandGen(is){
       let col, a = 255;
       if (t >= 1){
         const dc = (t-1)*C.RR[px];
-        col = waterCol(shelfS(gx, gy, dc, sw), gx, gy);
-        const fe = 3.2 + (vnoise(gx*0.13, gy*0.13) - 0.5)*3.2 + (fbm(gx*0.035+5, gy*0.035, 2) - 0.5)*3;
-        if (dc < fe) col = mix3([250,253,251], [236,248,244], dc/Math.max(0.5, fe));
-        else if (dc < fe + 3) col = mix3(col, [232,248,240], (1 - (dc - fe)/3)*0.65);
-        a = 255*(1 - smooth(11, 15.5, dc));
-        if (a < 2) continue;
+        if (dc > 3.6) continue;
+        const washK = (vnoise(gx*0.14, gy*0.14) - 0.5)*1.2;
+        col = [236, 248, 244];
+        a = Math.round(255 * (1 - smooth(0.3, 3.2 + washK, dc)) * 0.75);
+        if (a < 3) continue;
       } else {
         const h = C.H[px];
         const sh = clamp(1 + ((C.H[px+1]-C.H[px-1]) + (Dn.H[px]-U.H[px]))*shadeK, is.big ? 0.45 : 0.64, is.big ? 1.5 : 1.36);
         const nC = vnoise(gx*0.1, gy*0.1);
-        const beach = 0.82 + C.WB[px]*0.22, sandK = smooth(beach - 0.02, beach + 0.012, tb);
+        // Organic cove vs headland beach distribution (no artificial circular band!)
+        const coveNoise = fbm(gx*0.012 + is.x*0.02, gy*0.012 + is.y*0.02, 2);
+        const beachBase = coveNoise > 0.42 ? (0.70 + (coveNoise-0.42)*0.2) : (0.97 + (0.42-coveNoise)*0.15);
+        const fineNoise = (vnoise(gx*0.06, gy*0.06) - 0.5)*0.09;
+        const sandK = smooth(beachBase - 0.04, beachBase + 0.03, tb + fineNoise);
         let sand = mix3(SAND_A, SAND_B, nC*0.7);
-        sand = mix3(sand, SAND_WET, smooth(0.955, 1.0, tb)*0.85);
+        sand = mix3(sand, SAND_WET, smooth(0.94, 1.0, tb)*0.85);
         let grass = mix3(JUNG_A, JUNG_B, fbm(gx*0.04+9, gy*0.04, 2));
         grass = mix3(grass, JUNG_DEEP, smooth(0.7, 0.35, t)*0.5);
         grass = mix3(grass, JUNG_B, smooth(1.4, 2.2, h)*0.35);
+        // Rocky headland drop-off: exposed bluffs plunge directly into sea with zero sand
+        if (sandK < 0.25 && tb > 0.90){
+          const cliffRock = mix3([82,86,78], [54,58,50], nC);
+          grass = mix3(grass, cliffRock, smooth(0.88, 0.98, tb)*0.85);
+        }
         if (is.big){
           // mountains: forest gives way to scrub, bare rock and pale summits
           const m = C.M[px];
@@ -2354,30 +2368,62 @@ function bakeShip(s, hullCol, sailCol){
         const off = (i - (T.guns-1)/2)*sp + dk*sp*0.5;
         for (const side of [-1, 1]){
           const ey = side > 0 ? W/2 - inset : -W/2 + inset;
-          g.fillStyle = '#1a1a1a'; g.fillRect(off - 0.9*gs, side > 0 ? ey - 1.2*gs : ey - 2.2*gs, 1.8*gs, 3.4*gs);
-          g.fillStyle = '#5a5a5a'; g.fillRect(off - 0.5*gs, side > 0 ? ey + 1.2*gs : ey - 2.0*gs, 1.0*gs, 0.7*gs);
-          g.fillStyle = '#2b2b2b'; g.fillRect(off - 1.4*gs, side > 0 ? ey - 3.6*gs : ey + 1.0*gs, 2.8*gs, 2.6*gs);
+          // Gunport interior dark cutout & red timber lining
+          g.fillStyle = '#141414'; g.fillRect(off - 1.0*gs, side > 0 ? ey - 1.2*gs : ey - 2.2*gs, 2.0*gs, 3.4*gs);
+          g.fillStyle = '#7a1c18'; g.fillRect(off - 0.7*gs, side > 0 ? ey - 0.8*gs : ey - 1.6*gs, 1.4*gs, 2.4*gs);
+          // Protruding 3D cannon barrel extending past hull
+          const barrelLen = 3.6*gs;
+          const by = side > 0 ? ey + 0.6*gs : ey - 1.8*gs;
+          g.fillStyle = 'rgba(0,10,20,0.4)';
+          g.fillRect(off - 0.5*gs + 0.6, by + (side > 0 ? 0.8 : -0.8), 1.2*gs, side > 0 ? barrelLen : -barrelLen);
+          g.fillStyle = '#222326';
+          g.fillRect(off - 0.6*gs, by, 1.2*gs, side > 0 ? barrelLen : -barrelLen);
+          g.fillStyle = '#565860';
+          g.fillRect(off - 0.2*gs, by, 0.4*gs, side > 0 ? barrelLen : -barrelLen);
+          g.fillStyle = '#3a3c42';
+          g.fillRect(off - 0.7*gs, by + (side > 0 ? barrelLen - 0.6*gs : -barrelLen), 1.4*gs, 0.7*gs);
         }
       }
     }
   }
   if (s.type !== 'fisher'){
-    const x0 = -L/2 + 1.6, x1 = -L/2 + L*0.22;
-    g.fillStyle = shadeHex(T.deck, 0.72); g.fillRect(x0, -W*0.3, x1 - x0, W*0.6);
-    g.fillStyle = shadeHex(T.deck, 0.9);
-    for (let y = -W*0.3; y < W*0.3; y += 1.2) g.fillRect(x0 + 0.3, y + 0.15, x1 - x0 - 0.6, 0.85);
-    g.strokeStyle = shadeHex(hullCol, 0.6); g.lineWidth = 0.6; g.strokeRect(x0, -W*0.3, x1 - x0, W*0.6);
-    g.fillStyle = 'rgba(255,220,140,0.75)'; g.fillRect(x0 + 0.8, -1, 1.4, 2);
-    g.strokeStyle = '#3a2410'; g.lineWidth = 0.4;
-    g.beginPath(); g.arc(x1 + 2.2, 0, 1.3, 0, TAU); g.stroke();
-    for (let k = 0; k < 4; k++){ const a = k/4*Math.PI; g.beginPath(); g.moveTo(x1 + 2.2 + Math.cos(a)*1.8, Math.sin(a)*1.8); g.lineTo(x1 + 2.2 - Math.cos(a)*1.8, -Math.sin(a)*1.8); g.stroke(); }
-    g.fillStyle = '#3e2a16'; g.fillRect(-L*0.02, -W*0.14, L*0.1, W*0.28);
-    g.strokeStyle = '#6b4c2a'; g.lineWidth = 0.3;
-    for (let x = -L*0.02; x <= L*0.08; x += 1){ g.beginPath(); g.moveTo(x, -W*0.14); g.lineTo(x, W*0.14); g.stroke(); }
-    for (let y = -W*0.14; y <= W*0.14; y += 1){ g.beginPath(); g.moveTo(-L*0.02, y); g.lineTo(L*0.08, y); g.stroke(); }
-    for (const [bx, by] of [[L*0.3, -W*0.18], [L*0.3, W*0.18], [L*0.34, 0]]){
-      g.fillStyle = '#6b4220'; g.beginPath(); g.arc(bx, by, 1.4, 0, TAU); g.fill();
-      g.strokeStyle = '#2a1a0c'; g.lineWidth = 0.3; g.beginPath(); g.arc(bx, by, 1.0, 0, TAU); g.stroke();
+    // Multi-tier decks: Forecastle (bow), Sunken Waist (midships), Quarterdeck & Poop Deck (stern)
+    // 1. Raised Quarterdeck at stern
+    const qx0 = -L/2 + 1.6, qx1 = -L*0.14;
+    g.fillStyle = shadeHex(T.deck, 0.72); g.fillRect(qx0, -W*0.32, qx1 - qx0, W*0.64);
+    g.fillStyle = shadeHex(T.deck, 0.95);
+    for (let y = -W*0.32; y < W*0.32; y += 1.3) g.fillRect(qx0 + 0.4, y + 0.15, qx1 - qx0 - 0.8, 0.95);
+    g.fillStyle = 'rgba(10,5,2,0.45)'; g.fillRect(qx1 - 1.0, -W*0.32, 2.5, W*0.64);
+    g.strokeStyle = '#321c0c'; g.lineWidth = 0.6;
+    g.beginPath(); g.moveTo(qx1, -W*0.32); g.lineTo(qx1, W*0.32); g.stroke();
+    for (let by = -W*0.30; by <= W*0.30; by += 2.4){
+      g.fillStyle = '#4a2c14'; g.fillRect(qx1 - 0.4, by - 0.4, 0.9, 0.9);
+    }
+    g.fillStyle = 'rgba(255,220,140,0.85)'; g.fillRect(qx0 + 0.8, -1.2, 1.6, 2.4);
+    g.strokeStyle = '#3a2410'; g.lineWidth = 0.5;
+    g.beginPath(); g.arc(qx1 - 3.5, 0, 1.4, 0, TAU); g.stroke();
+    for (let k = 0; k < 4; k++){ const a = k/4*Math.PI; g.beginPath(); g.moveTo(qx1 - 3.5 + Math.cos(a)*1.9, Math.sin(a)*1.9); g.lineTo(qx1 - 3.5 - Math.cos(a)*1.9, -Math.sin(a)*1.9); g.stroke(); }
+    g.fillStyle = '#b89030'; g.beginPath(); g.arc(qx1 - 1.5, 0, 0.9, 0, TAU); g.fill();
+
+    // 2. Sunken Waist (Main deck): Open wooden hatch grating & cargo coamings
+    const wx0 = -L*0.12, wx1 = L*0.22;
+    g.fillStyle = '#261608'; g.fillRect(-L*0.04, -W*0.16, L*0.14, W*0.32);
+    g.strokeStyle = '#7c5228'; g.lineWidth = 0.35;
+    for (let x = -L*0.04; x <= L*0.10; x += 1.2){ g.beginPath(); g.moveTo(x, -W*0.16); g.lineTo(x, W*0.16); g.stroke(); }
+    for (let y = -W*0.16; y <= W*0.16; y += 1.2){ g.beginPath(); g.moveTo(-L*0.04, y); g.lineTo(L*0.10, y); g.stroke(); }
+    g.fillStyle = '#5a3818'; g.beginPath(); g.arc(wx0 + 3.2, 0, 1.6, 0, TAU); g.fill();
+    g.strokeStyle = '#221206'; g.lineWidth = 0.4; g.stroke();
+
+    // 3. Raised Forecastle at bow
+    const fx0 = L*0.22, fx1 = L*0.44;
+    g.fillStyle = shadeHex(T.deck, 0.78);
+    g.beginPath();
+    g.moveTo(fx0, -W*0.30); g.lineTo(fx1, -W*0.12); g.lineTo(fx1, W*0.12); g.lineTo(fx0, W*0.30);
+    g.closePath(); g.fill();
+    g.fillStyle = 'rgba(10,5,2,0.40)'; g.fillRect(fx0 - 1.2, -W*0.30, 2.0, W*0.60);
+    for (const [bx, by] of [[L*0.34, -W*0.22], [L*0.34, W*0.22], [L*0.38, 0]]){
+      g.fillStyle = '#6b4220'; g.beginPath(); g.arc(bx, by, 1.5, 0, TAU); g.fill();
+      g.strokeStyle = '#2a1a0c'; g.lineWidth = 0.35; g.beginPath(); g.arc(bx, by, 1.0, 0, TAU); g.stroke();
     }
   } else {
     g.fillStyle = '#f2efe6'; g.fillRect(-L*0.36, -W*0.27, L*0.24, W*0.54);
@@ -5702,10 +5748,21 @@ const vis = (x, y, r) => x + r > vx0 && x - r < vx0 + vw && y + r > vy0 && y - r
 const toScreen = (x, y) => [ (x - cam.x)*cam.z + VW/2, (y - cam.y)*cam.z + VH/2 ];
 
 function drawDeep(o){
-  const [ox, oy] = lean(o.x, o.y, -o.depth);
+  const depth = o.depth || 40;
+  const [ox, oy] = lean(o.x, o.y, -depth);
   ctx.save(); ctx.translate(o.x + ox, o.y + oy); ctx.rotate(o.rot);
-  ctx.globalAlpha = o.shallow ? 0.85 : 0.6;
+  // Atmospheric ocean absorption: deeper submerged objects shift with intense parallax and subtle cyan tint
+  const alpha = o.shallow ? 0.85 : Math.max(0.35, 0.70 - depth * 0.003);
+  ctx.globalAlpha = alpha;
   ctx.drawImage(o.cv, -o.ww/2, -o.hh/2, o.ww, o.hh);
+  if (graphicsMode === 'high' && !o.shallow){
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.10 * Math.max(0, 1 - weather.rain);
+    ctx.fillStyle = '#4ae2ca';
+    const cx = Math.sin(time * 1.4 + o.x * 0.03) * 6;
+    ctx.fillRect(-o.ww/2 + cx, -o.hh/2, o.ww * 0.8, o.hh);
+    ctx.globalCompositeOperation = 'source-over';
+  }
   ctx.restore(); ctx.globalAlpha = 1;
 }
 function drawWater(){
@@ -5841,10 +5898,10 @@ function drawShip(s, alpha=1, scale=1, tilt=0, sailA=1){
     ctx.beginPath(); ctx.moveTo(s.x + ca0*T.len*0.42, s.y + sa0*T.len*0.42); ctx.lineTo(bx + ca0*8, by + sa0*8); ctx.stroke();
     ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.arc(bx + ca0*8, by + sa0*8, 2.5 + Math.sin(time*2 + s.id), 0, TAU); ctx.stroke();
   }
-  // shadows on the water: the hull close by, the tall sails further out
+  // shadows on the water: the hull close by, the tall sails further out, shifting with 3D roll and pitch
   if (graphicsMode === 'high'){
-    blit(sp.hullSil, 5*hh - bobH*0.3, 7*hh - bobH*0.3, 0.45);
-    blit(sp.sailSil, 16*hk + (rgx*roll)*20*hk, 21*hk + (rgy*roll)*20*hk, 0.24*sailA);
+    blit(sp.hullSil, (5*hh - bobH*0.3) + (rgx*roll)*6*hh, (7*hh - bobH*0.3) + (rgy*roll)*6*hh, 0.45);
+    blit(sp.sailSil, 16*hk + (rgx*roll)*24*hk + fwx*pitch*12, 21*hk + (rgy*roll)*24*hk + fwy*pitch*12, 0.26*sailA);
   }
   if (s.fishing){
     const nx = s.x - Math.cos(s.a)*28, ny = s.y - Math.sin(s.a)*28;
@@ -5891,9 +5948,13 @@ function drawShip(s, alpha=1, scale=1, tilt=0, sailA=1){
   for (const m of msts){
     const fx = s.x + ca*m.x*scale, fy = s.y + sa*m.x*scale;
     pole(fx, fy, dxs, dys, dxt, dyt, s.type === 'fisher' ? 1.1 : 1.6*Math.sqrt(hk));
-    if (hk > 1.4){ // a lookout's fighting top on tall masts
-      const tx = fx + dxs + (dxt - dxs)*0.45, ty = fy + dys + (dyt - dys)*0.45;
-      ctx.fillStyle = '#3e2814'; ell(tx, ty, 3.2*scale, 3.2*scale); ctx.fillStyle = '#7a5530'; ell(tx - 0.4, ty - 0.4, 2.2*scale, 2.2*scale);
+    if (hk > 0.85 && s.type !== 'fisher'){ // authentic lookout fighting top on masts
+      const tx = fx + dxs + (dxt - dxs)*0.42, ty = fy + dys + (dyt - dys)*0.42;
+      ctx.fillStyle = 'rgba(0,10,20,0.35)'; ell(tx + 1, ty + 1.2, 3.6*scale, 3.0*scale);
+      ctx.fillStyle = '#321e0e'; ell(tx, ty, 3.4*scale, 2.8*scale);
+      ctx.fillStyle = '#7a5530'; ell(tx - 0.3, ty - 0.3, 2.4*scale, 1.9*scale);
+      ctx.strokeStyle = '#1a0e06'; ctx.lineWidth = 0.5*scale;
+      ctx.beginPath(); ctx.ellipse(tx, ty - 0.8*scale, 3.2*scale, 2.6*scale, 0, 0, TAU); ctx.stroke();
     }
     ctx.fillStyle = '#2e1c0c'; ell(fx + dxt, fy + dyt, 1.3*scale, 1.3*scale);
     ctx.fillStyle = '#a07040'; ell(fx + dxt - 0.3, fy + dyt - 0.3, 0.6*scale, 0.6*scale);
@@ -6717,11 +6778,151 @@ function drawParts(layer){
   ctx.globalAlpha = 1;
 }
 
-const STRUCT_H = { house: 12, market: 8, shipwright: 14, hut: 8, tent: 6, fort: 18, tavern: 11, church: 16, shack: 9 };
-const WALL_COL = { house: '#e8dcc0', market: '#7a5230', shipwright: '#6a4a2c', hut: '#9a7240', tent: '#c9b38a', fort: '#8a8780', tavern: '#d8c8a0', church: '#e6e0d2', shack: '#6a5236' };
+const STRUCT_H = { house: 12, market: 8, shipwright: 14, hut: 8, tent: 6, fort: 18, tavern: 11, church: 16, shack: 9, lighthouse: 42 };
+const WALL_COL = { house: '#e8dcc0', market: '#7a5230', shipwright: '#6a4a2c', hut: '#9a7240', tent: '#c9b38a', fort: '#8a8780', tavern: '#d8c8a0', church: '#e6e0d2', shack: '#6a5236', lighthouse: '#edebe6' };
 function drawStructDyn(is, st){
-  const wx = is.x + st.x, wy = is.y + st.y, h = STRUCT_H[st.kind];
+  const wx = is.x + st.x, wy = is.y + st.y, h = STRUCT_H[st.kind] || 12;
   const [ox, oy] = lean(wx, wy, h);
+  if (st.kind === 'lighthouse'){
+    // 1. Long directional shadow cast on ground and sea
+    ctx.fillStyle = 'rgba(0,16,28,0.36)';
+    const shDist = h * 0.85;
+    const shx = wx + shDist * 0.55, shy = wy + shDist * 0.70;
+    ctx.beginPath();
+    ctx.moveTo(wx - 9, wy);
+    ctx.lineTo(shx - 3.5, shy);
+    ctx.arc(shx, shy, 5, Math.PI, 0);
+    ctx.lineTo(wx + 9, wy);
+    ctx.closePath();
+    ctx.fill();
+
+    // 2. Heavy circular stone foundation apron with steps
+    ctx.fillStyle = 'rgba(10,20,25,0.4)';
+    ell(wx, wy, 15, 12);
+    ctx.fillStyle = '#65635e';
+    ell(wx, wy, 13, 10);
+    ctx.strokeStyle = '#3e3d3a'; ctx.lineWidth = 0.8; ctx.stroke();
+    ctx.fillStyle = '#3a2010';
+    ctx.fillRect(wx - 2.5, wy + 2, 5, 6);
+
+    // 3. Tapering 3D tower shaft with alternating nautical red & white bands
+    const bands = 5;
+    const rBase = 9.0, rTop = 5.8;
+    for (let b = 0; b < bands; b++){
+      const u0 = b / bands, u1 = (b + 1) / bands;
+      const h0 = u0 * h * 0.82, h1 = u1 * h * 0.82;
+      const [ox0, oy0] = lean(wx, wy, h0), [ox1, oy1] = lean(wx, wy, h1);
+      const rad0 = rBase * (1 - u0) + rTop * u0;
+      const rad1 = rBase * (1 - u1) + rTop * u1;
+      const x0 = wx + ox0, y0 = wy + oy0;
+      const x1 = wx + ox1, y1 = wy + oy1;
+      
+      const isRed = (b % 2 === 1);
+      const colBase = isRed ? '#ba201c' : '#edebe6';
+      const colShade = isRed ? '#70100d' : '#8a8882';
+      const colLit = isRed ? '#e83832' : '#ffffff';
+
+      const tg = ctx.createLinearGradient(x0 - rad0, y0, x0 + rad0, y0);
+      tg.addColorStop(0, colShade);
+      tg.addColorStop(0.35, colBase);
+      tg.addColorStop(0.85, colLit);
+      tg.addColorStop(1, colShade);
+
+      ctx.fillStyle = tg;
+      ctx.beginPath();
+      ctx.moveTo(x0 - rad0, y0);
+      ctx.lineTo(x1 - rad1, y1);
+      ctx.lineTo(x1 + rad1, y1);
+      ctx.lineTo(x0 + rad0, y0);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = 'rgba(20,20,20,0.25)'; ctx.lineWidth = 0.4; ctx.stroke();
+    }
+
+    // 4. Overhanging iron balcony & gallery railing at height 35
+    const [oxG, oyG] = lean(wx, wy, 35);
+    const gx = wx + oxG, gy = wy + oyG;
+    ctx.fillStyle = '#222224';
+    ell(gx, gy, 8.5, 6.5);
+    ctx.strokeStyle = '#111112'; ctx.lineWidth = 0.7;
+    ctx.beginPath(); ctx.ellipse(gx, gy - 2.5, 8.2, 6.2, 0, 0, TAU); ctx.stroke();
+
+    // 5. Enclosed octagonal glass lantern room
+    const [oxL, oyL] = lean(wx, wy, 38.5);
+    const lx = wx + oxL, ly = wy + oyL;
+    ctx.fillStyle = 'rgba(160, 235, 245, 0.45)';
+    ell(lx, ly, 6.0, 4.6);
+    ctx.strokeStyle = '#323236'; ctx.lineWidth = 0.6; ctx.stroke();
+
+    ctx.fillStyle = '#fff9d0';
+    ell(lx, ly, 2.8, 2.2);
+    ctx.fillStyle = '#ffb820';
+    ell(lx, ly, 1.6, 1.2);
+
+    // 6. Conical copper dome roof with spire
+    const [oxR, oyR] = lean(wx, wy, 44);
+    const rx = wx + oxR, ry = wy + oyR;
+    const cg = ctx.createLinearGradient(gx - 6, gy, gx + 6, gy);
+    cg.addColorStop(0, '#2d5c48');
+    cg.addColorStop(0.45, '#488a70');
+    cg.addColorStop(1, '#204636');
+    ctx.fillStyle = cg;
+    ctx.beginPath();
+    ctx.moveTo(gx - 6.2, gy - 1);
+    ctx.lineTo(rx, ry - 3);
+    ctx.lineTo(gx + 6.2, gy - 1);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#ffd240'; ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.moveTo(rx, ry - 3); ctx.lineTo(rx, ry - 8); ctx.stroke();
+    ctx.fillStyle = '#ffd240'; ell(rx, ry - 8, 1.0, 1.0);
+
+    // 7. Sweeping 3D volumetric light beam sweeping the ocean
+    const beamA = time * 0.62 + (wx * 0.015);
+    const beamLen = 320;
+    const spread = 0.28;
+    const b1x = lx + Math.cos(beamA - spread) * beamLen;
+    const b1y = ly + Math.sin(beamA - spread) * beamLen;
+    const b2x = lx + Math.cos(beamA + spread) * beamLen;
+    const b2y = ly + Math.sin(beamA + spread) * beamLen;
+
+    const bg = ctx.createRadialGradient(lx, ly, 4, lx, ly, beamLen);
+    bg.addColorStop(0, 'rgba(255, 252, 210, 0.55)');
+    bg.addColorStop(0.18, 'rgba(255, 248, 180, 0.32)');
+    bg.addColorStop(0.65, 'rgba(200, 240, 255, 0.12)');
+    bg.addColorStop(1, 'rgba(180, 230, 255, 0)');
+
+    ctx.save();
+    ctx.fillStyle = bg;
+    ctx.beginPath();
+    ctx.moveTo(lx, ly);
+    ctx.lineTo(b1x, b1y);
+    ctx.lineTo(b2x, b2y);
+    ctx.closePath();
+    ctx.fill();
+
+    const oppA = beamA + Math.PI;
+    const r1x = lx + Math.cos(oppA - spread*0.6) * (beamLen*0.45);
+    const r1y = ly + Math.sin(oppA - spread*0.6) * (beamLen*0.45);
+    const r2x = lx + Math.cos(oppA + spread*0.6) * (beamLen*0.45);
+    const r2y = ly + Math.sin(oppA + spread*0.6) * (beamLen*0.45);
+    const rbg = ctx.createRadialGradient(lx, ly, 3, lx, ly, beamLen*0.45);
+    rbg.addColorStop(0, 'rgba(255, 252, 210, 0.35)');
+    rbg.addColorStop(1, 'rgba(200, 240, 255, 0)');
+    ctx.fillStyle = rbg;
+    ctx.beginPath();
+    ctx.moveTo(lx, ly);
+    ctx.lineTo(r1x, r1y);
+    ctx.lineTo(r2x, r2y);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.globalAlpha = 0.75 + Math.sin(time*5)*0.2;
+    ctx.drawImage(softSprite('#ffea78'), lx - 16, ly - 16, 32, 32);
+    ctx.restore();
+    return;
+  }
   if (graphicsMode === 'high' || mode === 'foot'){
     const c = Math.cos(st.rot), s = Math.sin(st.rot);
     const corners = [[-1,-1],[1,-1],[1,1],[-1,1]].map(([a,b]) => [wx + (a*st.w/2)*c - (b*st.h/2)*s, wy + (a*st.w/2)*s + (b*st.h/2)*c]);
@@ -6732,7 +6933,7 @@ function drawStructDyn(is, st){
     for (let i = 0; i < 4; i++){ const a = corners[i], b = corners[(i+1)%4]; walls.push({ a, b, i, d: Math.hypot((a[0]+b[0])/2 - cam.x, (a[1]+b[1])/2 - eyeY()) }); }
     walls.sort((p, q) => q.d - p.d);
     for (const w of walls){
-      ctx.fillStyle = shadeHex(WALL_COL[st.kind], [0.8, 0.95, 1.05, 0.7][w.i]);
+      ctx.fillStyle = shadeHex(WALL_COL[st.kind] || '#e8dcc0', [0.8, 0.95, 1.05, 0.7][w.i]);
       ctx.beginPath(); ctx.moveTo(w.a[0], w.a[1]); ctx.lineTo(w.b[0], w.b[1]); ctx.lineTo(w.b[0] + ox, w.b[1] + oy); ctx.lineTo(w.a[0] + ox, w.a[1] + oy); ctx.closePath(); ctx.fill();
       ctx.strokeStyle = 'rgba(30,15,5,0.4)'; ctx.lineWidth = 0.4; ctx.stroke();
     }
@@ -6854,35 +7055,48 @@ function drawCanopies(is){
       else for (const p of foes){ if (!p.dead && !p.deckShip && Math.abs(p.x - x) < t.r && Math.hypot(p.x - x, p.y - y) < t.r*1.15){ alpha = 0.55; break; } }
     }
     const shk = t.shake > 0 ? Math.sin(time*60)*t.shake*0.5 : 0;
+    const windSway = Math.sin(time*1.8 + t.x*0.08 + t.y*0.04)*0.07*(weather.rain > 0.2 ? 1.6 : 1.0);
     ctx.globalAlpha = alpha;
     if (t.palm && (graphicsMode === 'high' || near)){
-      ctx.save(); ctx.translate(x + ox, y + oy); ctx.rotate(t.rot + Math.sin(time*1.6 + t.x*0.1)*0.05 + shk);
+      ctx.save(); ctx.translate(x + ox, y + oy); ctx.rotate(t.rot + windSway + shk);
       ctx.drawImage(spr.c, -sz/2, -sz/2, sz, sz); ctx.restore();
-    } else ctx.drawImage(spr.c, x + ox - sz/2 + shk*6, y + oy - sz/2, sz, sz);
+    } else {
+      const bSway = Math.sin(time*1.4 + t.x*0.06)*k*1.2;
+      ctx.drawImage(spr.c, x + ox - sz/2 + bSway + shk*6, y + oy - sz/2, sz, sz);
+    }
   }
   ctx.globalAlpha = 1;
 }
 
 function drawIslandFallback(is){
-  // Sand shoreline beach
-  ctx.fillStyle = '#e5bc82';
+  // Base lush natural landmass
+  ctx.fillStyle = is.volc ? '#382c26' : '#2d6824';
   ctx.beginPath();
   is.pts.forEach(([px, py], i) => i ? ctx.lineTo(is.x + px, is.y + py) : ctx.moveTo(is.x + px, is.y + py));
   ctx.closePath(); ctx.fill();
 
-  // Interior lush jungle vegetation
-  const jScale = is.big ? 0.90 : 0.82;
-  ctx.fillStyle = is.volc ? '#423630' : '#38782e';
-  ctx.beginPath();
-  is.pts.forEach(([px, py], i) => i ? ctx.lineTo(is.x + px*jScale, is.y + py*jScale) : ctx.moveTo(is.x + px*jScale, is.y + py*jScale));
-  ctx.closePath(); ctx.fill();
+  // Natural crescent beaches in sheltered coves only (no concentric ring!)
+  ctx.fillStyle = '#e5bc82';
+  const len = is.pts.length;
+  for (let i = 0; i < len; i += 12){
+    const [px, py] = is.pts[i], ang = Math.atan2(py, px);
+    if (Math.sin(ang * 2.2 + is.x * 0.02) > 0.38){
+      ctx.beginPath();
+      ctx.ellipse(is.x + px * 0.94, is.y + py * 0.94, is.R * 0.14, is.R * 0.06, ang + Math.PI/2, 0, TAU);
+      ctx.fill();
+    }
+  }
 
-  // Mountain / volcano peak for large islands
+  // 3D elevated mountain / volcano peak with perspective lean
   if (is.big){
-    const pScale = 0.52;
-    ctx.fillStyle = is.volc ? '#241a14' : '#275620';
+    const [ox, oy] = lean(is.x, is.y, 24);
+    ctx.fillStyle = is.volc ? '#1f1611' : '#1e4818';
     ctx.beginPath();
-    is.pts.forEach(([px, py], i) => i ? ctx.lineTo(is.x + px*pScale, is.y + py*pScale) : ctx.moveTo(is.x + px*pScale, is.y + py*pScale));
+    is.pts.forEach(([px, py], i) => {
+      const pScale = 0.50;
+      const gx = is.x + ox + px*pScale, gy = is.y + oy + py*pScale;
+      i ? ctx.lineTo(gx, gy) : ctx.moveTo(gx, gy);
+    });
     ctx.closePath(); ctx.fill();
   }
 }
@@ -6910,16 +7124,13 @@ function render(){
       ctx.drawImage(is.shelf, is.x - is.sext, is.y - is.sext, is.sext*2, is.sext*2);
     } else {
       const sw = is.shelfW || 120;
-      for (const [scaleMult, col] of [
-        [1 + sw*0.82/is.R, 'rgba(16, 78, 114, 0.40)'],
-        [1 + sw*0.50/is.R, 'rgba(34, 166, 162, 0.55)'],
-        [1 + sw*0.22/is.R, 'rgba(74, 222, 198, 0.68)']
-      ]){
-        ctx.fillStyle = col;
-        ctx.beginPath();
-        is.pts.forEach(([px, py], i) => i ? ctx.lineTo(is.x + px*scaleMult, is.y + py*scaleMult) : ctx.moveTo(is.x + px*scaleMult, is.y + py*scaleMult));
-        ctx.closePath(); ctx.fill();
-      }
+      const grad = ctx.createRadialGradient(is.x, is.y, is.R*0.75, is.x, is.y, is.R + sw*0.75);
+      grad.addColorStop(0, 'rgba(64, 215, 192, 0.52)');
+      grad.addColorStop(0.35, 'rgba(28, 150, 150, 0.42)');
+      grad.addColorStop(0.72, 'rgba(16, 78, 114, 0.22)');
+      grad.addColorStop(1, 'rgba(12, 43, 74, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(is.x, is.y, is.R + sw*0.75, 0, TAU); ctx.fill();
     }
   }
 
@@ -6958,16 +7169,6 @@ function render(){
   for (const t of turtles) if (vis(t.x, t.y, 12)) drawTurtle(t);
   ctx.lineCap = 'round';
 
-  if (graphicsMode === 'high'){
-    for (const is of visIs){
-      for (const [off, a, spd] of [[12, 0.22, 2.5], [26, 0.12, -2]]){
-        const lap = Math.sin(time*spd + is.x*0.01);
-        ctx.strokeStyle = `rgba(235,252,245,${a*(0.7 + 0.3*lap)})`; ctx.lineWidth = 1.6;
-        ringPath(is.pts, is.x, is.y, 1 + (off + lap*2.5)/is.R); ctx.stroke();
-      }
-    }
-  }
-
   // Island Landmass: Draw high-res baked canvas if ready, or crisp vector island (NEVER invisible!)
   for (const is of visIs){
     if (is.cv && is.ext && vis(is.x, is.y, is.ext)){
@@ -6975,30 +7176,61 @@ function render(){
     } else {
       drawIslandFallback(is);
     }
-    // Anti-aliased sandy shoreline border: eliminates any raster staircase at the water line
-    ctx.strokeStyle = '#e2b87a';
-    ctx.lineWidth = 2.4;
-    ringPath(is.pts, is.x, is.y, 1.0);
-    ctx.stroke();
   }
-  for (const is of visIs){
-    const lap = (Math.sin(time*1.1 + is.x*0.01) + 1)/2;
-    ctx.strokeStyle = `rgba(255,255,255,${0.55 + 0.3*lap})`; ctx.lineWidth = 2.4;
-    ringPath(is.pts, is.x, is.y, 1 + (3 + lap*3.5)/is.R); ctx.stroke();
-    if (graphicsMode === 'high'){
-      const ph = (time*0.18 + is.y*0.0013) % 1;
-      ctx.strokeStyle = `rgba(255,255,255,${(1-ph)*0.35})`; ctx.lineWidth = 1.4;
-      ringPath(is.pts, is.x, is.y, 1 + (7 + ph*15)/is.R); ctx.stroke();
+
+  // Organic coastal shorewash foam: breaks naturally along windward beaches and rocky points
+  if (graphicsMode === 'high'){
+    for (const is of visIs){
+      const pts = is.pts, len = pts.length;
+      if (!len) continue;
+      const wDir = wind.a;
+      ctx.fillStyle = 'rgba(240, 252, 248, 0.42)';
+      const step = 4;
+      for (let i = 0; i < len; i += step){
+        const [px, py] = pts[i], ang = Math.atan2(py, px);
+        // Waves hit shores exposed toward wind direction
+        const exp = Math.cos(ang - wDir);
+        if (exp > -0.3){
+          const phase = Math.sin(time * 2.2 + is.x * 0.02 + i * 0.35);
+          if (phase > 0.15){
+            const dist = 1.0 + (0.4 + phase * 2.0) / is.R;
+            const fx = is.x + px * dist, fy = is.y + py * dist;
+            ctx.beginPath();
+            ctx.ellipse(fx, fy, 2.2 + phase * 1.5, 1.2, ang + Math.PI/2, 0, TAU);
+            ctx.fill();
+          }
+        }
+      }
     }
   }
+
+  // 3D vertical sea-stack rocks with faceted granite cliffs and directional tidal wash
   for (const r of rocks){
     if (!vis(r.x, r.y, r.r*2.6)) continue;
     if (!r.cv) bakeRock(r);
-    ctx.drawImage(r.cv, r.x - r.ext, r.y - r.ext, r.ext*2, r.ext*2);
+    const rkH = Math.min(22, Math.max(8, r.r * 1.2));
+    const [ox, oy] = lean(r.x, r.y, rkH);
+    // Dark sea-contact shadow
+    ctx.fillStyle = 'rgba(0,18,30,0.38)';
+    ell(r.x + rkH*0.25, r.y + rkH*0.35, r.r*1.15, r.r*0.85);
+    // Vertical sea-stack cliff facets
+    ctx.fillStyle = '#22252a';
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, r.r * 0.95, 0, TAU);
+    ctx.arc(r.x + ox, r.y + oy, r.r * 0.95, 0, TAU);
+    ctx.fill();
+    // Sunlit top crag summit with perspective offset
+    ctx.drawImage(r.cv, r.x + ox - r.ext, r.y + oy - r.ext, r.ext*2, r.ext*2);
+    // Directional windward tidal wash (no concentric circle)
     if (graphicsMode === 'high'){
-      const ph = (time*0.4 + r.y*0.01) % 1;
-      ctx.strokeStyle = `rgba(255,255,255,${(1-ph)*0.4})`; ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.arc(r.x, r.y, r.r*(1.2 + ph*0.5), 0, TAU); ctx.stroke();
+      const wDir = wind.a;
+      const wx = r.x + Math.cos(wDir) * r.r * 1.1;
+      const wy = r.y + Math.sin(wDir) * r.r * 1.1;
+      const washLap = (Math.sin(time * 3.0 + r.x * 0.05) + 1) * 0.5;
+      ctx.fillStyle = `rgba(242, 252, 250, ${0.35 * washLap})`;
+      ctx.beginPath();
+      ctx.ellipse(wx, wy, r.r * (0.8 + washLap * 0.4), r.r * 0.35, wDir + Math.PI/2, 0, TAU);
+      ctx.fill();
     }
   }
   for (const is of visIs) if (vis(is.x, is.y, is.max + 30)) drawGroundDetails(is);
