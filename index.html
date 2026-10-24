@@ -6671,7 +6671,7 @@ var qrcode = function() {
       let hatMesh = null;
       const hasHat = options.hasHat !== undefined ? options.hasHat : (role === 'captain' || role === 'guard' || role === 'governor' || role === 'patron');
       const hatType = options.hatType || (hasHat ? 'tricorn' : 'none');
-      const hatColor = options.hatColor || (role === 'governor' ? 0x1e3a8a : (role === 'guard' ? 0x1e293b : 0x1f242d));
+      const hatColor = options.hatColor || (role === 'governor' ? 0x1e3a8a : (role === 'guard' ? 0x1e293b : 0x141414));
 
       if (hatType === 'tricorn') {
         hatMesh = new THREE.Group();
@@ -7183,19 +7183,29 @@ var qrcode = function() {
         let hat = pick(L.hats, r), hatCol = pick(L.hatCols, r);
         if (hatCol == null) hatCol = captainRef ? new THREE.Color(captainRef.css).getHex() : 0x8a2f25;
         let shirt = pick(L.shirts, r), trousers = pick(L.trousers, r);
-        if (role === 'officer') {
-          hat = 'tricorn'; hatCol = 0x1a1a1c;
-          shirt = look === 'royal_navy' ? 0x1b2f5e : (look === 'corsair' ? 0x8e1d16 : (look === 'pirate' ? 0x3a1a14 : (look === 'player' ? 0x4a2e1c : 0x3a4a3a)));
+        const isPlayerCaptain = (look === 'player' && (role === 'helm' || role === 'tiller' || role === 'captain'));
+        if (role === 'officer' || isPlayerCaptain) {
+          hat = 'tricorn'; hatCol = 0x141414; // The captain's iconic black pirate hat!
+          shirt = look === 'royal_navy' ? 0x1b2f5e : (look === 'corsair' ? 0x8e1d16 : (look === 'pirate' ? 0x3a1a14 : 0x8b1e17));
           trousers = look === 'royal_navy' ? 0xefebe0 : 0x2a2420;
         }
         const m = {
           grp, role, look,
+          isCaptain: isPlayerCaptain,
+          hidden: false,
           x: spot.x, y: spot.y, z: spot.z, yaw: spot.yaw != null ? spot.yaw : Math.PI,
           home: Object.assign({}, spot), side: spot.side || 0,
           deck: extra.deck || null, decks: extra.decks || null,
           state: 'idle', wait: 1 + r() * 3, target: null, walkPh: r() * 6, phase: r() * 6, seed: r() * 100,
           act: null, actT: 0, fireT: 99, cheerT: 0, yawT: spot.yaw != null ? spot.yaw : Math.PI,
-          cols: { shirt: new THREE.Color(shirt), trousers: new THREE.Color(trousers), skin: new THREE.Color(pick(SKIN, r)), hat: hat === 'none' ? null : hat, hatCol: new THREE.Color(hatCol), beard: r() < (role === 'officer' ? 0.6 : 0.3) ? new THREE.Color(pick([0x2a1c12, 0x4a3420, 0x6b5a48, 0x1a1410], r)) : null },
+          cols: {
+            shirt: new THREE.Color(shirt),
+            trousers: new THREE.Color(trousers),
+            skin: new THREE.Color(pick(SKIN, r)),
+            hat: hat === 'none' ? null : hat,
+            hatCol: new THREE.Color(hatCol),
+            beard: (isPlayerCaptain || r() < (role === 'officer' ? 0.6 : 0.3)) ? new THREE.Color(pick([0x221c17, 0x2a1c12, 0x1a1410], r)) : null
+          },
           scale: 1.08 + r() * 0.12,
           j: { crouch: 0, lean: 0, twist: 0, hy: 0, hp: 0, shL: 0, shR: 0, oL: 0.1, oR: 0.1, eL: -0.15, eR: -0.15, hL: 0, hR: 0, kL: 0, kR: 0, hop: 0 }
         };
@@ -7391,6 +7401,11 @@ var qrcode = function() {
           const m = members[i];
           const grp = m.grp;
           if (!grp.parent || !grp.visible) continue;
+          if (m.hidden) continue;
+          // Hide player captain from flagship helm when disembarked in dinghy or on foot
+          if (m.isCaptain && m.grp === player.mesh && typeof IslandExploration !== 'undefined' && IslandExploration.mode !== 'ship') {
+            continue;
+          }
           const gp = grp.position;
           if (Math.abs(gp.x - camTarget.x) > 150 || Math.abs(gp.z - camTarget.z) > 150) continue;
           const sc = grp.scale.x || 1;
@@ -7433,7 +7448,9 @@ var qrcode = function() {
       }
 
       function count() { return members.length; }
-      return { populateShip, removeShip, update, onFire, cheer, count, init };
+      function getCrew(grp) { return shipCrews.get(grp) || []; }
+      function removeMember(m) { const i = members.indexOf(m); if (i >= 0) members.splice(i, 1); }
+      return { populateShip, removeShip, update, onFire, cheer, count, init, getCrew, removeMember };
     })();
 
     /* =========================================================================
@@ -9351,6 +9368,25 @@ var qrcode = function() {
         g.scale.setScalar(0.78);
         g.visible = false;
         scene.add(g);
+
+        // Customize dinghy crew: ONLY the captain, wearing his black pirate hat & crimson coat
+        const list = Crew.getCrew ? Crew.getCrew(g) : null;
+        if (list) {
+          while (list.length > 1) {
+            const extra = list.pop();
+            Crew.removeMember(extra);
+          }
+          if (list.length > 0) {
+            const rower = list[0];
+            rower.isDinghyCaptain = true;
+            rower.cols.hat = 'tricorn';
+            rower.cols.hatCol = new THREE.Color(0x141414); // Black pirate hat!
+            rower.cols.shirt = new THREE.Color(0x8b1e17); // Crimson captain coat!
+            rower.cols.trousers = new THREE.Color(0x2a2420); // Dark breeches!
+            rower.cols.beard = new THREE.Color(0x221c17); // Pirate beard!
+            dinghyState.rowerMember = rower;
+          }
+        }
         return g;
       }
 
@@ -9362,7 +9398,9 @@ var qrcode = function() {
           role: 'captain',
           hasHat: true,
           hatType: 'tricorn',
+          hatColor: 0x141414, // iconic black pirate hat!
           coatColor: 0x8b1e17, // bold crimson pirate captain coat
+          trouserColor: 0x2a2420,
           scale: 0.95
         });
         const cd = char.userData.characterData;
@@ -9640,13 +9678,19 @@ var qrcode = function() {
         mainShip.targetSpeed = 0;
         mainShip.sailState = 0;
 
-        // Launch dinghy to starboard beam of main ship
-        const launchDir = mainShip.heading + Math.PI / 2;
-        const dx = mainShip.position.x + Math.sin(launchDir) * (mainShip.tierConfig.scale * 3.2 + 2.0);
-        const dz = mainShip.position.z - Math.cos(launchDir) * (mainShip.tierConfig.scale * 3.2 + 2.0);
-        const dy = Math.max(0.1, Terrain.height(dx, dz) + 0.1);
+        // Launch dinghy to starboard beam of main ship, or port if starboard is shallow
+        let sideDir = mainShip.heading + Math.PI / 2;
+        const dist = mainShip.tierConfig.scale * 3.2 + 2.2;
+        let dx = mainShip.position.x + Math.sin(sideDir) * dist;
+        let dz = mainShip.position.z - Math.cos(sideDir) * dist;
+        if (Terrain.height(dx, dz) > -0.25) {
+          sideDir = mainShip.heading - Math.PI / 2;
+          dx = mainShip.position.x + Math.sin(sideDir) * dist;
+          dz = mainShip.position.z - Math.cos(sideDir) * dist;
+        }
 
-        dinghyState.position.set(dx, dy, dz);
+        const waterH = getGerstnerWaterHeight(dx, dz, 0);
+        dinghyState.position.set(dx, 0.08 + waterH, dz);
         dinghyState.heading = mainShip.heading;
         dinghyState.speed = 0;
         dinghyState.targetSpeed = 0;
@@ -9654,6 +9698,7 @@ var qrcode = function() {
         dinghyMesh.rotation.y = -dinghyState.heading;
         dinghyMesh.visible = true;
 
+        if (dinghyState.rowerMember) dinghyState.rowerMember.hidden = false;
         if (pirateChar) pirateChar.visible = false;
         mode = 'dinghy';
 
@@ -9674,13 +9719,13 @@ var qrcode = function() {
         pirateState.heading = dinghyState.heading;
         pirateState.speed = 0;
         pirateChar.position.copy(pirateState.position);
-        pirateChar.rotation.y = -pirateState.heading;
+        pirateChar.rotation.y = -pirateState.heading + Math.PI;
         pirateChar.visible = true;
 
-        // Dinghy remains beached at water's edge
+        // Dinghy remains beached at water's edge, rower leaves the boat
         dinghyState.speed = 0;
         dinghyState.targetSpeed = 0;
-        if (dinghyState.rower) dinghyState.rower.visible = false;
+        if (dinghyState.rowerMember) dinghyState.rowerMember.hidden = true;
 
         mode = 'onfoot';
         playSound('splash');
@@ -9692,7 +9737,7 @@ var qrcode = function() {
       function boardDinghyFromShore() {
         if (mode !== 'onfoot') return;
         pirateChar.visible = false;
-        if (dinghyState.rower) dinghyState.rower.visible = true;
+        if (dinghyState.rowerMember) dinghyState.rowerMember.hidden = false;
         mode = 'dinghy';
         playSound('splash');
         showBanner("🛶 Aboard the dinghy! Row with [W/A/S/D], press [Z] to land or board.");
@@ -9704,6 +9749,7 @@ var qrcode = function() {
         if (targetShip === player) {
           // Returning to own flagship
           dinghyMesh.visible = false;
+          if (dinghyState.rowerMember) dinghyState.rowerMember.hidden = true;
           if (pirateChar) pirateChar.visible = false;
           mode = 'ship';
           playSound('bell');
@@ -9875,12 +9921,28 @@ var qrcode = function() {
           const targetSpd = row * 6.5;
           dinghyState.speed = THREE.MathUtils.lerp(dinghyState.speed, targetSpd, Math.min(1, dt * 3.5));
 
-          dinghyState.position.x += Math.sin(dinghyState.heading) * dinghyState.speed * dt;
-          dinghyState.position.z -= Math.cos(dinghyState.heading) * dinghyState.speed * dt;
+          const curX = dinghyState.position.x;
+          const curZ = dinghyState.position.z;
+          const curH = Terrain.height(curX, curZ);
 
+          const step = dinghyState.speed * dt;
+          const nextX = curX + Math.sin(dinghyState.heading) * step;
+          const nextZ = curZ - Math.cos(dinghyState.heading) * step;
+          const nextH = Terrain.height(nextX, nextZ);
+
+          // Dinghy draft ~0.2m: cannot float or drive onto dry land!
+          // Block movement into dry land or shallow shoreline (nextH > -0.18m),
+          // but always allow moving back away from the shore into deeper water (nextH < curH).
+          if (nextH <= -0.18 || nextH < curH) {
+            dinghyState.position.x = nextX;
+            dinghyState.position.z = nextZ;
+          } else {
+            dinghyState.speed = 0;
+          }
+
+          // Dinghy stays strictly on the ocean water surface — NEVER floats or drives onto land:
           const waterH = getGerstnerWaterHeight(dinghyState.position.x, dinghyState.position.z, curTime);
-          const groundH = Terrain.height(dinghyState.position.x, dinghyState.position.z);
-          dinghyState.position.y = Math.max(groundH + 0.15, 0.12 + waterH);
+          dinghyState.position.y = 0.08 + waterH;
 
           dinghyMesh.position.copy(dinghyState.position);
           dinghyMesh.rotation.y = -dinghyState.heading;
@@ -9957,7 +10019,7 @@ var qrcode = function() {
 
           pirateState.position.y = Math.max(0, Terrain.height(pirateState.position.x, pirateState.position.z));
           pirateChar.position.copy(pirateState.position);
-          pirateChar.rotation.y = -pirateState.heading;
+          pirateChar.rotation.y = -pirateState.heading + Math.PI;
 
           // Check proximity to dinghy or nearby ship
           nearbyTarget = null;
