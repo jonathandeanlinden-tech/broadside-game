@@ -11,6 +11,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Pirata+One&display=swap" rel="stylesheet">
+  <script src="./peerjs.min.js"></script>
+  <script>
+    if (typeof Peer === 'undefined') {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"><\/script>');
+    }
+  </script>
   <!--
     BROADSIDE (V11) — one file, two roles:
       • Open normally on the TV/computer  → the game (shows a QR code)
@@ -238,11 +244,12 @@
     .glyph.round { border-radius: 50%; padding: 0; }
 
     .pad-chip { position: absolute; bottom: 4.5vh; left: 4vw; padding: calc(var(--u) * 1) calc(var(--u) * 1.8); font-size: .8em; font-weight: 700;
-      display: flex; align-items: center; gap: .6em; max-width: 30vw; }
+      display: flex; align-items: center; gap: .6em; max-width: 32vw; cursor: pointer; pointer-events: auto; z-index: 40; transition: all 0.2s ease; }
+    .pad-chip:hover { border-color: var(--brass); background: rgba(11, 29, 51, 0.95); transform: translateY(-1px); }
     .pad-chip .dot { width: 1em; height: 1em; border-radius: 50%; background: #64748b; flex: none; }
     .pad-chip.on .dot { background: var(--hull); box-shadow: 0 0 1vh var(--hull); }
     .pad-chip.wait .dot { background: var(--brass); animation: hull-pulse 1.2s infinite; }
-    #pad-chip, #pause-hint { display: none !important; }   /* V22: phone join info lives in the pause menu */
+    #pause-hint { display: none !important; }
     .pause-hint { position: absolute; bottom: 4.5vh; right: 4vw; padding: calc(var(--u) * 1) calc(var(--u) * 1.8); font-size: .8em; font-weight: 700; color: var(--ink-dim); }
 
     /* ---------- Intro fly-in letterbox ---------- */
@@ -529,7 +536,7 @@ body.chart-open #hud, body.chart-open #damage-container { opacity: 0; transition
         <b class="glyph">Z</b> 🛶 <span id="disembark-label">Disembark Dinghy</span>
       </button>
 
-      <div class="pad-chip panel wait" id="pad-chip"><span class="dot"></span><span id="pad-chip-text">Phone controller: connecting…</span></div>
+      <div class="pad-chip panel wait" id="pad-chip" onclick="UI.showJoin(() => UI.closeMenu())" title="Click to view QR Code & connect phone"><span class="dot"></span><span id="pad-chip-text">Phone controller: connecting…</span></div>
       <div class="pause-hint panel" id="pause-hint">Pause</div>
     </div>
 
@@ -2700,8 +2707,15 @@ var qrcode = function() {
 
       /* ---------------- join / QR ---------------- */
       function padUrl() {
-        if (!/^https?:$/.test(location.protocol)) return null;
-        const u = new URL(location.href);
+        // If playing from file:// or localhost, route mobile device to live GitHub Pages controller
+        const isLocal = !/^https?:$/.test(location.protocol) || /^(localhost|127\.|\[::1\])/.test(location.hostname);
+        let baseUrl;
+        if (isLocal) {
+          baseUrl = 'https://jonathandeanlinden-tech.github.io/broadside-game/';
+        } else {
+          baseUrl = location.href;
+        }
+        const u = new URL(baseUrl);
         u.search = ''; u.hash = '';
         u.searchParams.set('pad', Net.code);
         ['peerhost', 'peerport', 'peerpath', 'peersecure'].forEach(k => { const v = Settings.params.get(k); if (v) u.searchParams.set(k, v); });
@@ -2729,35 +2743,40 @@ var qrcode = function() {
       function statusText() {
         const n = Net.count();
         switch (Net.status) {
-          case 'ready': return n > 0 ? { t: `✓ ${n} phone${n > 1 ? 's' : ''} connected — you're at the helm!`, ok: true } : { t: 'Waiting for a phone to scan…' };
-          case 'nolib': return { t: "Couldn't load the connection library — is the TV online?" };
+          case 'ready': return n > 0 ? { t: `✓ ${n} phone${n > 1 ? 's' : ''} connected — you're at the helm!`, ok: true } : { t: `Ready! Room code: ${Net.code} — scan QR with your phone` };
+          case 'nolib': return { t: "Couldn't load PeerJS library — check internet connection." };
           case 'unsupported': return { t: "This browser can't link phones (no WebRTC). Use a gamepad or keyboard." };
-          case 'retrying': case 'error': return { t: 'Relay unreachable — retrying…' };
-          case 'reconnecting': return n > 0 ? { t: `✓ ${n} phone${n > 1 ? 's' : ''} connected`, ok: true } : { t: 'Reconnecting to the relay…' };
-          default: return { t: 'Opening the harbour…' };
+          case 'retrying': case 'error': return { t: 'Connecting to PeerJS relay…' };
+          case 'reconnecting': return n > 0 ? { t: `✓ ${n} phone${n > 1 ? 's' : ''} connected`, ok: true } : { t: 'Reconnecting to PeerJS relay…' };
+          default: return { t: 'Opening phone controller link…' };
         }
       }
 
       function fillJoin(root) {
         const url = padUrl();
         const box = root.querySelector('[data-qr]');
-        root.querySelector('[data-code]').textContent = Net.code || '····';
+        const codeEl = root.querySelector('[data-code]');
+        if (codeEl) codeEl.textContent = Net.code || '····';
         const urlEl = root.querySelector('[data-url]');
         if (!url) {
           box.innerHTML = ''; box.classList.add('off');
-          box.textContent = 'Phones can only join when the game is opened from a web address (e.g. Netlify or GitHub Pages), not as a file. Keyboard and gamepad still work.';
-          urlEl.textContent = '';
+          box.textContent = 'Unable to generate phone controller link.';
+          if (urlEl) urlEl.textContent = '';
         } else {
           if (box.dataset.qrFor !== url) { drawQR(box, url); box.dataset.qrFor = url; }
-          urlEl.textContent = url;
-          if (/^(localhost|127\.|\[::1\])/.test(location.hostname)) {
-            urlEl.textContent = url + '  —  phones can\'t open "localhost": use this computer\'s network address instead.';
+          if (urlEl) {
+            urlEl.textContent = url;
+            if (/^(localhost|127\.|\[::1\])/.test(location.hostname) || !/^https?:$/.test(location.protocol)) {
+              urlEl.innerHTML = `Controller link: <a href="${url}" target="_blank" style="color:var(--sea);text-decoration:underline;">${url}</a><br><span style="font-size:0.85em;color:var(--ink-dim);">Scanning this QR opens the live mobile controller on your phone and pairs it to this game via PeerJS!</span>`;
+            }
           }
         }
         const st = statusText();
         const s = root.querySelector('[data-status]');
-        s.textContent = st.t;
-        s.classList.toggle('ok', !!st.ok);
+        if (s) {
+          s.textContent = st.t;
+          s.classList.toggle('ok', !!st.ok);
+        }
       }
 
       function joinMarkup() { return document.getElementById('tpl-join').content.cloneNode(true); }
@@ -2774,9 +2793,9 @@ var qrcode = function() {
         chip.classList.toggle('wait', n === 0 && Net.status !== 'nolib' && Net.status !== 'unsupported');
         let txt;
         if (n > 0) txt = `📱 ${n > 1 ? n + ' phones' : 'Phone'} connected`;
-        else if (Net.status === 'ready') txt = `📱 Join with code <b>${Net.code}</b> (pause menu shows the QR)`;
-        else if (Net.status === 'nolib' || Net.status === 'unsupported') txt = '📱 Phone controller unavailable';
-        else txt = '📱 Opening phone link…';
+        else if (Net.status === 'ready') txt = `📱 Phone controller: <b>${Net.code}</b> (click for QR)`;
+        else if (Net.status === 'nolib' || Net.status === 'unsupported') txt = '📱 Phone controller offline';
+        else txt = '📱 Connecting phone controller…';
         el['pad-chip-text'].innerHTML = txt;
       }
 
@@ -4679,8 +4698,9 @@ var qrcode = function() {
     sunLight.shadow.camera.right = shadowDist;
     sunLight.shadow.camera.top = shadowDist;
     sunLight.shadow.camera.bottom = -shadowDist;
-    sunLight.shadow.bias = -0.0004;
-    sunLight.shadow.normalBias = 0.01;
+    sunLight.shadow.bias = -0.0003;
+    sunLight.shadow.normalBias = 0.02;
+    sunLight.shadow.radius = 1.5;
     scene.add(sunLight);
     scene.add(sunLight.target);
 
@@ -5069,20 +5089,22 @@ var qrcode = function() {
         vec3 naturalNormal = normalize(vNormal + vec3(-dSlope.x, 0.0, -dSlope.y) * 0.22);
 
         // =============================================================
-        // CARIBBEAN MULTI-DEPTH COLOR GRADATION & TRANSPARENCY
+        // CARIBBEAN MULTI-DEPTH COLOR GRADATION & REAL-WORLD 35M EXTINCTION
         // =============================================================
-        // Pure tropical water body color: clear aqua tint in shallows,
-        // so the radiant golden coral sand at the bottom shines through
-        // and physically gives the shallow water its world-famous turquoise color!
-        // Pure transparent Caribbean water: crystal-clear tropical turquoise tint across the entire top surface layer.
-        // Surface mesh carries a luminous turquoise hue that multiplies gently over the bottom depths.
-        // The deep parts of the ocean have their dark blue colour at the bottom on the seabed,
-        // so looking into the water looks directly into the depth.
-        vec3 waterColor = mix(vec3(0.015, 0.08, 0.15), vec3(0.05, 0.76, 0.84), uDayFactor);
+        // Real-world clean tropical ocean visibility: ~35m photic extinction limit.
+        // In shallows (0-5m), water is crystal clear and transparent (~0.18 alpha),
+        // allowing radiant golden coral sand, coral heads, and caustics to shine through.
+        // Between 8m and 35m, optical absorption and Rayleigh scattering build smoothly.
+        // At 35m+, water reaches full opacity (1.0) and transitions into deep oceanic navy/indigo,
+        // completely obscuring the ocean floor and underwater detail at deep depths.
+        float depthExtinction = smoothstep(8.0, 35.0, waterDepth);
+        vec3 shallowTurquoise = mix(vec3(0.015, 0.08, 0.15), vec3(0.05, 0.76, 0.84), uDayFactor);
+        vec3 deepOceanAbyss = mix(vec3(0.005, 0.022, 0.055), vec3(0.012, 0.095, 0.24), uDayFactor);
+        vec3 waterColor = mix(shallowTurquoise, deepOceanAbyss, depthExtinction);
 
         // Realistic Voronoi caustic shimmer in shallow Caribbean water volume
         // Strictly 40% of the light from the sky: soft turquoise shimmer by day,
-        // and faint deep dark blue reflection at night
+        // and faint deep dark blue reflection at night. Fades away into depth.
         if (waterDepth < 5.0) {
           float shallowFade = smoothstep(0.05, 0.25, waterDepth) * (1.0 - smoothstep(2.5, 5.0, waterDepth));
           float sCaustic = getOceanUnderwaterCaustic(vWorldPos.xz, uTime);
@@ -5117,7 +5139,8 @@ var qrcode = function() {
         float specSharp = pow(nDotH, 120.0);
         float totalSpec = specBroad * 0.12 + specSharp * 0.55;
 
-        // Real-Time Directional Soft Shadow from ship hulls, masts, sails, trees, and fortresses
+        // Real-Time Directional Soft Shadow with contact hardening:
+        // Sharp at contact point (bottom of hull), blurring progressively more as shadow travels further
         float shadow = getShadowMask();
         waterColor *= mix(0.35, 1.0, shadow);
         totalSpec *= shadow;
@@ -5156,12 +5179,12 @@ var qrcode = function() {
           waterColor = mix(waterColor, vec3(0.86, 0.93, 1.0) * (0.45 + 0.55 * uDayFactor), clamp(rings, 0.0, 1.0) * 0.5 * uRain);
         }
 
-        // Truly transparent Caribbean water with slight turquoise multiply effect:
-        // Clear water foundation lets the bottom detail and caustics dance through,
-        // while the top water layer adds a subtle, luminous tropical turquoise filter.
-        float opticalAlpha = 0.22 + 0.16 * (1.0 - exp(-waterDepth * 0.05));
+        // Truly transparent Caribbean water with calibrated ~35m visibility cutoff:
+        // Clear water in shallows (opticalAlpha ~ 0.18), transitioning smoothly to 1.0 (completely opaque) at 35m
+        float opticalAlpha = mix(0.18 + 0.14 * smoothstep(0.0, 6.0, waterDepth), 1.0, depthExtinction);
         // Glancing view toward horizon reflects sky and becomes opaque via Fresnel
-        float waterAlpha = mix(clamp(opticalAlpha, 0.22, 0.94), 0.98, fresnel * 0.75);
+        float waterAlpha = mix(clamp(opticalAlpha, 0.18, 1.0), 0.98, fresnel * 0.75);
+        // Shoreline surf and foam are opaque white
         // Shoreline surf and foam are opaque white
         waterAlpha = max(waterAlpha, foamAmt * 0.94);
 
@@ -5661,6 +5684,12 @@ var qrcode = function() {
                vec3 cCol = mix(nightReflection, dayReflection, daylight);
                outgoingLight += cCol * (cVal * depthFade * patternLight);
              }
+
+             // Real-world ~35m visibility limit:
+             // Bottom detail, rock contours, and terrain features dissolve into oceanic abyss fog as depth approaches 35m
+             float seabedExtinction = smoothstep(9.0, 35.0, uDepth);
+             vec3 deepAbyssCol = mix(vec3(0.004, 0.018, 0.045), vec3(0.010, 0.08, 0.20), clamp(uTerrainDayFactor, 0.0, 1.0));
+             outgoingLight = mix(outgoingLight, deepAbyssCol, seabedExtinction);
            }
            gl_FragColor = vec4( outgoingLight, diffuseColor.a );`
         );
@@ -15253,7 +15282,42 @@ var qrcode = function() {
         setTimeout(() => t.remove(), 7000);
       });
 
-      const peerLoaded = loadAny(LIBS.peer); // Net waits for window.Peer itself
+      const peerLoaded = (typeof Peer !== 'undefined') ? Promise.resolve(true) : loadAny(LIBS.peer);
+
+      function upgradeThreeShadowChunk() {
+        if (!THREE.ShaderChunk || !THREE.ShaderChunk.shadowmap_pars_fragment) return;
+        const oldPars = THREE.ShaderChunk.shadowmap_pars_fragment;
+        const pcfSoftIdx = oldPars.indexOf('#elif defined( SHADOWMAP_TYPE_PCF_SOFT )');
+        const vsmIdx = oldPars.indexOf('#elif defined( SHADOWMAP_TYPE_VSM )');
+        if (pcfSoftIdx === -1 || vsmIdx === -1) return;
+
+        const newBranch = `#elif defined( SHADOWMAP_TYPE_PCF_SOFT )
+			vec2 texelSize = vec2( 1.0 ) / shadowMapSize;
+			float blockerDepth = unpackRGBAToDepth( texture2D( shadowMap, shadowCoord.xy ) );
+			float dBlocker = max( 0.0, shadowCoord.z - blockerDepth );
+			// Contact hardening: sharp at base/contact (dBlocker ~ 0), blurring progressively as shadow gets longer
+			// On the ocean floor (depth 5m - 35m), dBlocker is naturally large, making seabed shadows blurry and soft
+			float pRadius = clamp( 1.0 + dBlocker * 750.0, 1.0, 13.0 ) * max( 1.0, shadowRadius );
+			vec2 sStep = texelSize * pRadius;
+			
+			shadow = (
+				texture2DCompare( shadowMap, shadowCoord.xy, shadowCoord.z ) * 2.0 +
+				texture2DCompare( shadowMap, shadowCoord.xy + vec2(-0.326, -0.406) * sStep, shadowCoord.z ) +
+				texture2DCompare( shadowMap, shadowCoord.xy + vec2(-0.840, -0.074) * sStep, shadowCoord.z ) +
+				texture2DCompare( shadowMap, shadowCoord.xy + vec2(-0.696,  0.457) * sStep, shadowCoord.z ) +
+				texture2DCompare( shadowMap, shadowCoord.xy + vec2(-0.203,  0.621) * sStep, shadowCoord.z ) +
+				texture2DCompare( shadowMap, shadowCoord.xy + vec2( 0.962, -0.195) * sStep, shadowCoord.z ) +
+				texture2DCompare( shadowMap, shadowCoord.xy + vec2( 0.473, -0.480) * sStep, shadowCoord.z ) +
+				texture2DCompare( shadowMap, shadowCoord.xy + vec2( 0.519,  0.767) * sStep, shadowCoord.z ) +
+				texture2DCompare( shadowMap, shadowCoord.xy + vec2( 0.185, -0.893) * sStep, shadowCoord.z ) +
+				texture2DCompare( shadowMap, shadowCoord.xy + vec2( 0.507,  0.064) * sStep, shadowCoord.z ) +
+				texture2DCompare( shadowMap, shadowCoord.xy + vec2( 0.896,  0.412) * sStep, shadowCoord.z ) +
+				texture2DCompare( shadowMap, shadowCoord.xy + vec2(-0.322, -0.933) * sStep, shadowCoord.z ) +
+				texture2DCompare( shadowMap, shadowCoord.xy + vec2(-0.792, -0.598) * sStep, shadowCoord.z )
+			) * ( 1.0 / 14.0 );`;
+
+        THREE.ShaderChunk.shadowmap_pars_fragment = oldPars.slice(0, pcfSoftIdx) + newBranch + '\n' + oldPars.slice(vsmIdx);
+      }
 
       if (mode === 'pad') {
         Pad.init(padCode);
@@ -15267,6 +15331,7 @@ var qrcode = function() {
           fatal('<div><h2 style="font-family:var(--display);color:var(--brass);font-size:6vh;margin:0">Broadside</h2><p>Couldn\'t load the 3D engine (three.js).<br>Check this device is connected to the internet, then reload.</p></div>');
           return;
         }
+        upgradeThreeShadowChunk();
         BroadsideGame();
       });
     })();
