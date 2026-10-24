@@ -4689,6 +4689,56 @@ var qrcode = function() {
       uniform float uDawnDuskFactor;
       uniform float uRain;
 
+      // Fast pseudo-random 2D hash for cellular Voronoi caustics
+      vec2 oceanCausticHash(vec2 p) {
+        p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+        return fract(sin(p) * 43758.5453);
+      }
+
+      // Cellular Voronoi Caustic: distance to cell boundary (F2 - F1)
+      float oceanVoronoiCaustic(vec2 p, float time) {
+        vec2 ip = floor(p);
+        vec2 fp = fract(p);
+        float d1 = 8.0;
+        float d2 = 8.0;
+
+        for (int j = -1; j <= 1; j++) {
+          for (int i = -1; i <= 1; i++) {
+            vec2 g = vec2(float(i), float(j));
+            vec2 h = oceanCausticHash(ip + g);
+            vec2 o = 0.5 + 0.38 * vec2(
+              sin(time * 1.7 + h.x * 6.2831),
+              cos(time * 1.5 + h.y * 6.2831)
+            );
+            vec2 r = g + o - fp;
+            float d = dot(r, r);
+            if (d < d1) {
+              d2 = d1;
+              d1 = d;
+            } else if (d < d2) {
+              d2 = d;
+            }
+          }
+        }
+        d1 = sqrt(d1);
+        d2 = sqrt(d2);
+        float edge = d2 - d1;
+        float core = clamp(1.0 - edge * 4.6, 0.0, 1.0);
+        float glow = clamp(1.0 - edge * 1.8, 0.0, 1.0);
+        return core * core * 1.35 + glow * 0.40;
+      }
+
+      float getOceanUnderwaterCaustic(vec2 p, float t) {
+        vec2 waveDisp = vec2(
+          sin(p.y * 0.75 + t * 1.8) * 0.16 + cos(p.x * 1.15 - t * 1.3) * 0.11,
+          cos(p.x * 0.85 - t * 1.6) * 0.16 + sin(p.y * 1.05 + t * 2.1) * 0.11
+        );
+        vec2 pos = p + waveDisp;
+        float c1 = oceanVoronoiCaustic(pos * 0.72, t * 1.15);
+        float c2 = oceanVoronoiCaustic((pos + vec2(1.7, -2.4)) * 1.45, t * 1.40);
+        return clamp(c1 * 0.75 + c2 * 0.45, 0.0, 1.6);
+      }
+
       // V22: raindrop rings — one drop per cell, each ring spreading and fading
       float rainRings(vec2 p, float t) {
         float acc = 0.0;
@@ -4751,6 +4801,14 @@ var qrcode = function() {
         float depthT2 = clamp((waterDepth - 6.0) / 14.0, 0.0, 1.0);
         vec3 waterColor = mix(colShallow, colMid, depthT1);
         waterColor = mix(waterColor, colDeep, depthT2);
+
+        // Realistic Voronoi caustic shimmer in shallow Caribbean water volume
+        if (waterDepth < 5.0) {
+          float shallowFade = smoothstep(0.05, 0.25, waterDepth) * (1.0 - smoothstep(2.5, 5.0, waterDepth));
+          float sCaustic = getOceanUnderwaterCaustic(vWorldPos.xz, uTime);
+          vec3 sCol = mix(vec3(0.48, 0.94, 1.0), vec3(1.0, 1.0, 1.0), clamp(sCaustic * 0.65, 0.0, 1.0));
+          waterColor += sCol * (sCaustic * shallowFade * 0.22 * uDayFactor);
+        }
 
         // Subtle soft cloud shadows
         vec2 cloudUV = (vWorldPos.xz + vec2(uTime * 2.8, -uTime * 1.5)) * 0.005;
@@ -5111,8 +5169,8 @@ var qrcode = function() {
     // Art-target colours for the terrain (linear, pre-lighting). Display ≈ ACES(lighting × value).
     const TERRAIN_STYLE = {
       grass: [0.41, 0.47, 0.085], grassLight: [0.51, 0.54, 0.13], grassDark: [0.31, 0.38, 0.075],
-      path: [1.05, 0.88, 0.62], sand: [1.02, 0.90, 0.68], sandWet: [0.94, 0.84, 0.64],
-      reefSand: [0.98, 0.88, 0.66], reefCoral: [0.26, 0.34, 0.32], shelfSlope: [0.09, 0.22, 0.30],
+      path: [1.05, 0.88, 0.62], sand: [1.05, 0.94, 0.72], sandWet: [0.98, 0.88, 0.68],
+      reefSand: [1.02, 0.92, 0.70], reefCoral: [0.26, 0.34, 0.32], shelfSlope: [0.09, 0.22, 0.30],
       cliff: [0.13, 0.135, 0.17], cliffWarm: [0.25, 0.18, 0.17], cliffDark: [0.08, 0.08, 0.1],
       deep: [0.045, 0.11, 0.19], abyssFloor: [0.025, 0.065, 0.13], seagrass: [0.18, 0.38, 0.22]
     };
@@ -5217,25 +5275,62 @@ var qrcode = function() {
            uniform vec3 uTerrainSunDir;
            varying vec3 vTerrainWorldPos;
 
+           // Fast pseudo-random 2D hash for cellular Voronoi caustics
+           vec2 causticHash2(vec2 p) {
+             p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+             return fract(sin(p) * 43758.5453);
+           }
+
+           // Cellular Voronoi Caustic (computes distance to cell boundary: F2 - F1)
+           // Produces the realistic interconnected curved caustic net seen in tropical shallows
+           float voronoiCaustic(vec2 p, float time) {
+             vec2 ip = floor(p);
+             vec2 fp = fract(p);
+             float d1 = 8.0;
+             float d2 = 8.0;
+
+             for (int j = -1; j <= 1; j++) {
+               for (int i = -1; i <= 1; i++) {
+                 vec2 g = vec2(float(i), float(j));
+                 vec2 h = causticHash2(ip + g);
+                 // Animated wave jitter
+                 vec2 o = 0.5 + 0.38 * vec2(
+                   sin(time * 1.7 + h.x * 6.2831),
+                   cos(time * 1.5 + h.y * 6.2831)
+                 );
+                 vec2 r = g + o - fp;
+                 float d = dot(r, r);
+                 if (d < d1) {
+                   d2 = d1;
+                   d1 = d;
+                 } else if (d < d2) {
+                   d2 = d;
+                 }
+               }
+             }
+             d1 = sqrt(d1);
+             d2 = sqrt(d2);
+             float edge = d2 - d1;
+             // Crisp white-hot filament line along the Voronoi ridge
+             float core = clamp(1.0 - edge * 4.6, 0.0, 1.0);
+             // Cyan dispersion glow surrounding the lines
+             float glow = clamp(1.0 - edge * 1.8, 0.0, 1.0);
+             return core * core * 1.35 + glow * 0.40;
+           }
+
+           // Multi-scale composite caustics matching Caribbean water photograph
            float getUnderwaterCaustic(vec2 p, float t) {
-             const vec2 d1 = vec2(0.866, 0.500);
-             const vec2 d2 = vec2(-0.383, 0.924);
-             const vec2 d3 = vec2(-0.766, -0.643);
-             const vec2 d4 = vec2(0.423, -0.906);
-
-             vec2 uv1 = p * 0.36 + d1 * (t * 0.75);
-             vec2 uv2 = p * 0.42 + d2 * (t * 0.65);
-             vec2 uv3 = p * 0.70 + d3 * (t * 0.95);
-             vec2 uv4 = p * 0.65 + d4 * (t * 0.85);
-
-             float w1 = sin(uv1.x + cos(uv1.y * 1.3));
-             float w2 = cos(uv2.y + sin(uv2.x * 1.2));
-             float w3 = sin(uv3.x * 1.15 - uv3.y * 0.85);
-             float w4 = cos(uv4.y * 1.25 + uv4.x * 0.75);
-
-             float cA = pow(max(0.0, 1.0 - abs(w1 + w2) * 0.58), 2.6);
-             float cB = pow(max(0.0, 1.0 - abs(w3 + w4) * 0.58), 2.6);
-             return cA * 0.60 + cB * 0.50;
+             // Surface-wave refractive distortion (breathes and warps with the swell)
+             vec2 waveDisp = vec2(
+               sin(p.y * 0.75 + t * 1.8) * 0.16 + cos(p.x * 1.15 - t * 1.3) * 0.11,
+               cos(p.x * 0.85 - t * 1.6) * 0.16 + sin(p.y * 1.05 + t * 2.1) * 0.11
+             );
+             vec2 pos = p + waveDisp;
+             // Primary layer: large bright cells (~1.4m scale)
+             float c1 = voronoiCaustic(pos * 0.72, t * 1.15);
+             // Secondary layer: finer delicate web filaments (~0.55m scale)
+             float c2 = voronoiCaustic((pos + vec2(1.7, -2.4)) * 1.45, t * 1.40);
+             return clamp(c1 * 0.75 + c2 * 0.45, 0.0, 1.6);
            }`
         );
 
@@ -5243,12 +5338,14 @@ var qrcode = function() {
           'gl_FragColor = vec4( outgoingLight, diffuseColor.a );',
           `if (vTerrainWorldPos.y < 0.25) {
              float uDepth = max(0.0, -vTerrainWorldPos.y);
-             float depthFade = smoothstep(0.02, 0.22, uDepth) * (1.0 - smoothstep(3.5, 12.0, uDepth));
+             // Razor sharp in shallows (0.05m - 3.5m), softly diffusing down to 12m
+             float depthFade = smoothstep(0.02, 0.22, uDepth) * (1.0 - smoothstep(3.8, 12.5, uDepth));
              if (depthFade > 0.002) {
                float cVal = getUnderwaterCaustic(vTerrainWorldPos.xz, uTerrainTime);
                float daylight = clamp(uTerrainDayFactor, 0.0, 1.0);
-               vec3 cCol = mix(vec3(0.18, 0.40, 0.55) * 0.25, vec3(0.60, 1.0, 0.95), daylight);
-               outgoingLight += cCol * (cVal * depthFade * (0.45 + 0.90 * daylight));
+               // Brilliant white filaments with radiant cyan edge dispersion over the sand
+               vec3 cCol = mix(vec3(0.48, 0.94, 1.0), vec3(1.0, 1.0, 1.0), clamp(cVal * 0.65, 0.0, 1.0));
+               outgoingLight += cCol * (cVal * depthFade * (0.85 + 1.35 * daylight));
              }
            }
            gl_FragColor = vec4( outgoingLight, diffuseColor.a );`
