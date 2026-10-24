@@ -3546,23 +3546,29 @@ var qrcode = function() {
         { x: 600, z: -590, rx: 7, rz: 9, blend: 4, d: -3.0 }     // Hidden Cove's anchorage
       ];
 
-      // Scale up islands (~1.65x) to create massive, majestic islands with large beaches and grass mass
+      // Scale up islands: large islands up to 100-400% internal land size, medium islands, and cays
+      const LARGE_ISLANDS = new Set([
+        'Port Royal', 'Pirate Haven', 'Isla Grande', 'Mount Cinder',
+        "Corsair's Crown", 'Thunder Bluff', "Widow's Peak",
+        'Mermaid Lagoon', 'Hidden Cove', "Smuggler's Rest"
+      ]);
       ISLANDS.forEach(I => {
+        const isLarge = LARGE_ISLANDS.has(I.name);
+        const scale = I.type === 'shoal' ? 1.25 : (isLarge ? 1.85 : (I.type === 'cay' ? 1.35 : 1.55));
         let cx = 0, cz = 0;
         I.lobes.forEach(l => { cx += l.x; cz += l.z; });
         cx /= I.lobes.length; cz /= I.lobes.length;
         I.lobes.forEach(l => {
           l.x = cx + (l.x - cx) * 1.15;
           l.z = cz + (l.z - cz) * 1.15;
-          l.rx *= 1.65;
-          l.rz *= 1.65;
+          l.rx *= scale;
+          l.rz *= scale;
           l.h = Math.max(l.h * 1.15, l.h + 0.6); // elevate the central grass mass
         });
-        I.shelf = (I.shelf || 0.6) * 1.5;
         let r = 0;
         I.lobes.forEach(l => {
           const maxR = Math.max(l.rx, l.rz);
-          const shelfReach = Math.max(I.shelf * maxR, 14) * 3.4 + 28;
+          const shelfReach = maxR * 0.45 + 16;
           r = Math.max(r, Math.hypot(l.x - cx, l.z - cz) + maxR + shelfReach);
         });
         I.cx = cx; I.cz = cz; I.br = r;
@@ -3581,54 +3587,88 @@ var qrcode = function() {
         for (const L of I.lobes) {
           const R = (L.rx + L.rz) * 0.5;
           const t0 = Math.hypot((x - L.x) / L.rx, (z - L.z) / L.rz);
-          const shelfW = Math.max(I.shelf * R, 14);
-          if ((t0 - 1) * R < shelfW * 3.4 + 24) { near = true; break; }
+          if ((t0 - 1) * R < 50) { near = true; break; }
         }
         if (!near) return -1e9;
-        const warp = 1 + 0.16 * fbm(x * 0.05, z * 0.05, 2) + 0.06 * noise(x * 0.18, z * 0.18);
+        const warp = 1 + 0.12 * fbm(x * 0.05, z * 0.05, 2) + 0.04 * noise(x * 0.18, z * 0.18);
         for (const L of I.lobes) {
           const dx = (x - L.x) / L.rx, dz = (z - L.z) / L.rz;
-          const t = Math.sqrt(dx * dx + dz * dz) * (I.type === 'volcano' ? (1 + 0.6 * (warp - 1)) : warp);
+          const t = Math.sqrt(dx * dx + dz * dz) * (I.type === 'volcano' ? (1 + 0.5 * (warp - 1)) : warp);
+          const ang = Math.atan2(z - L.z, x - L.x);
           let h;
-          if (t < 1) {
-            const core = smooth(1.0, 0.2, t);
-            const hills = 0.75 + 0.45 * fbm(x * 0.08 + 11, z * 0.08 - 5, 3);
-            if (I.type === 'cay') {
-              h = 0.25 + (L.h - 0.25) * Math.pow(smooth(1.0, 0.4, t), 0.75) + 0.12 * noise(x * 0.35, z * 0.35);
-            } else if (I.type === 'volcano') {
-              const ang = Math.atan2(z - L.z, x - L.x);
-              const ridges = 1 + 0.07 * noise(ang * 5 + 11, t * 2.5) + 0.05 * Math.sin(ang * 11 + 4 * noise(x * 0.04, z * 0.04));
-              const cr = I.crater ? 0.16 : 0;
-              const cone = L.h * Math.pow(1 - t, 1.45);
-              h = cone * ridges * (0.92 + 0.08 * hills);
-              if (cr && t < cr + 0.04) {
-                const rim = L.h * Math.pow(1 - cr, 1.45) * ridges;
-                const bowl = rim - I.crater * (1 - Math.pow(Math.min(1, t / cr), 2.2));
-                h = t < cr ? bowl : h + (rim + 1.2 - h) * smooth(cr + 0.04, cr, t);
-              }
-              h = Math.max(h, 0.35 + 0.9 * smooth(1.0, 0.86, t)) + 0.2 * noise(x * 0.3, z * 0.3);
+
+          if (I.type === 'shoal') {
+            // Submerged shoals: 10-15% shallows shelf around crest, then drop into deep ocean
+            if (t <= 1.0) {
+              h = I.top + 0.35 * fbm(x * 0.16, z * 0.16, 2) * (1 - t);
+            } else if (t <= 1.15) {
+              const u = (t - 1.0) / 0.15;
+              h = I.top - 2.5 * smooth(0, 1, u);
             } else {
-              // Asymmetrical coast: large expansive sandy beach on sheltered sides, sharp cliff rocks on exposed sides
-              const base = I.type === 'rocky' ? 6.5 : 5.4;
-              // Sharp rock cliff: steep precipitous drop right into the sea
-              const cliffProfile = -0.4 + (base + 0.4) * smooth(1.0, 0.88, t)
-                + terrace(Math.max(0, L.h - base) * Math.pow(smooth(0.85, 0.15, t), 1.1) * hills, I.type === 'rocky' ? 2.2 : 2.6);
-              // Large sandy beach: gentle, gradual slope rising slowly from the waterline into the central grass plateau
-              const beachProfile = 0.05 + smooth(1.0, 0.45, t) * 2.2 + Math.max(0, L.h - 1.8) * Math.pow(core, 1.4) * hills * 0.7;
-              const cove = I.type === 'rocky' ? 0.0 : smooth(0.35, 0.65, noise(x * 0.035 + 7, z * 0.035 - 3));
-              h = cliffProfile + (beachProfile - cliffProfile) * cove;
+              const u = Math.min(1.0, (t - 1.15) / 0.22);
+              h = I.top - 2.5 - 18.0 * smooth(0, 1, u);
             }
           } else {
-            // Gradual sandy shelf tapering smoothly into deeper sea
-            const R = (L.rx + L.rz) * 0.5;
-            const shelfW = Math.max(I.shelf * R, 15);
-            const s = (t - 1) * R / shelfW;
-            h = -0.15 - 1.6 * smooth(0.0, 0.65, s) - 4.5 * smooth(0.65, 1.5, s) - 17.5 * smooth(1.5, 3.2, s);
-            if (I.crest) h += 2.2 * Math.exp(-Math.pow((s - 0.75) / 0.15, 2)) * smooth(-0.35, 0.05, noise(x * 0.10 + 4, z * 0.10));
+            // Universal Island Physics Calculation:
+            // 1) Land inside: 0 <= t < 0.75 (the rest of the 100%, and up to 100-400% for larger islands)
+            // 2) Sandy beach: 0.75 <= t <= 1.0 (20-25% profile, gradual 5-20 deg dip)
+            // 3) The shallows: 1.0 < t <= 1.15 (10-15% profile, gradual 5-20 deg dip to -3.8m)
+            // 4) Drop into deep: t > 1.15 (plunges down to -22m)
+            // 5) Rocky flank: exposed cliff face & sea stacks (as shown in diagram)
+
+            const rockFlankAngle = 2.3; // prevailing northwest ocean swell
+            const flankDot = Math.cos(ang - rockFlankAngle);
+            const isRockyFlank = (I.type === 'rocky') ? (flankDot > -0.3) : (flankDot > 0.45 && noise(x * 0.05, z * 0.05) > -0.15);
+
+            if (isRockyFlank) {
+              // Steep cliff face on exposed flank: drops precipitously into the water, exposing rock
+              if (t <= 0.88) {
+                const u = (0.88 - t) / 0.88;
+                const hills = 0.85 + 0.35 * fbm(x * 0.08 + 11, z * 0.08 - 5, 2);
+                h = 3.2 + Math.max(0, L.h - 3.2) * Math.pow(u, 1.15) * hills;
+              } else if (t <= 1.05) {
+                // Steep cliff drop from 3.2m to -1.8m (slope > 0.50 = rock cliff face)
+                const u = (t - 0.88) / 0.17;
+                h = 3.2 - 5.0 * smooth(0, 1, u);
+                // Boulders / sea stacks along the base (as in diagram)
+                if (noise(x * 0.25, z * 0.25) > 0.35) h += 1.8 * Math.sin(t * 18.0 + ang * 6.0);
+              } else if (t <= 1.18) {
+                // Submerged rocky ledge dipping to shelf edge
+                const u = (t - 1.05) / 0.13;
+                h = -1.8 - 2.4 * smooth(0, 1, u);
+              } else {
+                // Steep drop into deep ocean floor
+                const u = Math.min(1.0, (t - 1.18) / 0.20);
+                h = -4.2 - 17.8 * smooth(0, 1, u);
+              }
+            } else {
+              // Gentle sandy beach flank (70-80% of perimeter, following user's exact specification):
+              if (t <= 0.75) {
+                // Interior land (Grass & Trees): rises smoothly from 2.0m at beach edge up to L.h
+                const u = (0.75 - t) / 0.75;
+                const hills = 0.85 + 0.35 * fbm(x * 0.08 + 11, z * 0.08 - 5, 2);
+                h = 2.0 + Math.max(0, L.h - 2.0) * Math.pow(u, 1.25) * hills;
+                if (I.type === 'volcano') {
+                  const cone = L.h * Math.pow(1 - t * 0.8, 1.4);
+                  h = Math.max(h, cone);
+                }
+              } else if (t <= 1.00) {
+                // Sandy beach (20-25%): gradual dip (5-20 deg) from 2.0m down to 0.0m waterline
+                const u = (1.00 - t) / 0.25;
+                h = 2.0 * Math.pow(smooth(0.0, 1.0, u), 0.95);
+              } else if (t <= 1.15) {
+                // The shallows (10-15%): gradual dip (5-20 deg) from 0.0m down to -3.8m
+                const u = (t - 1.00) / 0.15;
+                h = -3.8 * smooth(0.0, 1.0, u);
+              } else {
+                // Drop into the deep: steep plunge from -3.8m down to -22.0m ocean floor
+                const u = Math.min(1.0, (t - 1.15) / 0.20);
+                h = -3.8 - 18.2 * smooth(0.0, 1.0, u);
+              }
+            }
           }
           if (h > best) best = h;
         }
-        if (I.type === 'shoal') best = Math.min(best, I.top + 0.7 * fbm(x * 0.16, z * 0.16, 2) + 0.5 * Math.max(0, noise(x * 0.33, z * 0.33)));
         return best;
       }
 
@@ -3681,7 +3721,7 @@ var qrcode = function() {
       ISLANDS.forEach(I => mark(I.cx - I.br, I.cz - I.br, I.cx + I.br, I.cz + I.br, (k, tx, tz) => {
         const cx = MIN_X + (tx + 0.5) * TILE, cz = MIN_Z + (tz + 0.5) * TILE;
         const hit = I.lobes.some(L => {
-          const R = (L.rx + L.rz) * 0.5, reach = Math.max(I.shelf * R, 14) * 3.4 + 28;
+          const R = (L.rx + L.rz) * 0.5, reach = R * 0.45 + 18;
           const dt = Math.hypot((cx - L.x) / L.rx, (cz - L.z) / L.rz);
           return (dt - 1) * Math.min(L.rx, L.rz) - TILE * 0.75 < reach;
         });
@@ -5213,33 +5253,33 @@ var qrcode = function() {
         const I = Terrain.islandAt(x, z), type = I ? I.type : 'sea';
         if (h < -0.2) {
           // Smooth continuous bathymetric depth gradient under the water:
-          // d = 0m to 2.5m: radiant golden-yellow coral sand (reefSand)
-          // d = 1.5m to 6.5m: smooth transition into vibrant Caribbean turquoise coral lagoon (reefCoral)
-          // d = 5.5m to 13.0m: smooth transition into coastal azure shelf (shelfSlope)
-          // d = 11.0m to 22.0m+: smooth transition into deep cobalt abyss floor (abyssFloor)
+          // d = 0m to 3.8m: the shallows (10-15% shelf, gradual 5-20 deg dip) with radiant golden reef sand (reefSand)
+          //                 and vibrant tropical Caribbean turquoise coral lagoon (reefCoral)
+          // d > 3.8m: drop into deep ocean (shelfSlope -> dark cobalt abyssFloor)
           const d = -h;
           const isBlack = I && (I.black || type === 'volcano');
           const shallowSand = isBlack ? blackSand : reefSand;
 
           c.copy(shallowSand);
           // Transition 1: golden sand -> vibrant tropical turquoise reef coral
-          const t1 = Terrain.smooth(1.5, 6.5, d);
+          const t1 = Terrain.smooth(1.0, 3.8, d);
           if (t1 > 0.0) {
             c.lerp(reefCoral, t1);
+            if (slope > 0.40) c.lerp(rock, 0.45 * Terrain.smooth(0.40, 0.75, slope));
           }
-          // Seagrass patches in sheltered shallows (1m to 8m)
-          if (!isBlack && n2 > 0.28 && d < 9.0) {
-            const grassMask = Terrain.smooth(0.28, 0.72, n2) * (1.0 - Terrain.smooth(5.0, 9.0, d)) * 0.40;
+          // Seagrass patches in sheltered shallows (0.8m to 3.5m)
+          if (!isBlack && n2 > 0.28 && d < 4.0 && slope < 0.25) {
+            const grassMask = Terrain.smooth(0.28, 0.72, n2) * (1.0 - Terrain.smooth(2.5, 4.0, d)) * 0.40;
             c.lerp(seagrass, grassMask);
           }
           // Transition 2: reef coral -> coastal azure shelf
-          const t2 = Terrain.smooth(5.5, 13.0, d);
+          const t2 = Terrain.smooth(3.5, 10.0, d);
           if (t2 > 0.0) {
             c.lerp(shelfSlope, t2);
-            if (slope > 0.45 && d < 14.0) c.lerp(rock, 0.35 * Terrain.smooth(0.45, 0.8, slope));
+            if (slope > 0.45 && d < 12.0) c.lerp(rock, 0.35 * Terrain.smooth(0.45, 0.8, slope));
           }
           // Transition 3: coastal azure -> abyssal cobalt floor
-          const t3 = Terrain.smooth(11.0, 22.0, d);
+          const t3 = Terrain.smooth(9.0, 18.0, d);
           if (t3 > 0.0) {
             c.lerp(abyssFloor, t3);
             if (slope > 0.55) c.lerp(rockDark, 0.40 * Terrain.smooth(0.55, 0.9, slope));
@@ -5256,17 +5296,16 @@ var qrcode = function() {
           if (h < 1.3) c.copy(blackSand);
           else if (h < 8) c.copy(grassDark).lerp(grass, Terrain.smooth(-0.3, 0.6, n2) * 0.5).lerp(scorched, Terrain.smooth(5, 8, h) * 0.7);
           else c.copy(basalt).lerp(ash, Terrain.smooth(0.45, 0.85, streak) * 0.75).lerp(scorched, Terrain.smooth(8, 12, h) * (1 - Terrain.smooth(12, 16, h)) * 0.6 + Terrain.smooth(33, 39, h) * 0.85);
-        } else if (slope > 0.75 && type !== 'cay') {
-          // Sharp rock cliff faces on the steep sides of the islands
+        } else if (slope > 0.40) {
+          // Sharp rock cliff faces & boulders (physics: loose sand & soil cannot hold on slopes > 22 deg)
           c.copy(rock).lerp(rockWarm, Terrain.smooth(0.0, 0.6, n) * 0.8).lerp(rockDark, Terrain.smooth(1.2, -0.4, h) * 0.5);
-        } else if (h < 2.5 || type === 'cay') {
-          // Large expansive sandy beaches: warm golden-yellow Caribbean sand
+        } else if (h < 2.2) {
+          // Sandy beach (20-25% profile): gentle 5-20 deg slopes
           c.copy(I && I.black ? blackSand : (h < 0.35 ? sandWet : sandDry));
-          if (type === 'cay' && h > 1.25) c.lerp(grass, Terrain.smooth(1.25, 1.6, h) * 0.7);
         } else {
           // In the center of the islands: lush green grass mass and trees
           c.copy(grass).lerp(grassLight, Terrain.smooth(-0.1, 0.7, n2) * 0.55).lerp(grassDark, Terrain.smooth(0.35, 0.9, n) * 0.35);
-          if (type === 'rocky') c.lerp(rock, 0.45);
+          if (slope > 0.55) c.lerp(rock, Terrain.smooth(0.55, 0.85, slope));
         }
         return c;
       }
