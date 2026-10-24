@@ -519,14 +519,14 @@ body.chart-open #hud, body.chart-open #damage-container { opacity: 0; transition
             <b class="glyph">SPACE</b> ⚔️ Attack / Chop
           </button>
           <button class="action-btn board-btn" id="btn-interact" onclick="IslandExploration.handleInteract()">
-            <b class="glyph">E</b> <span id="interact-label">Board Dinghy</span>
+            <b class="glyph">Z</b> <span id="interact-label">Board Dinghy</span>
           </button>
         </div>
       </section>
 
       <!-- Disembark Prompt Button for Ship Mode -->
       <button class="disembark-chip panel" id="btn-disembark-chip" onclick="IslandExploration.handleDisembarkBtn()">
-        <b class="glyph">E</b> 🛶 <span id="disembark-label">Disembark Dinghy</span>
+        <b class="glyph">Z</b> 🛶 <span id="disembark-label">Disembark Dinghy</span>
       </button>
 
       <div class="pad-chip panel wait" id="pad-chip"><span class="dot"></span><span id="pad-chip-text">Phone controller: connecting…</span></div>
@@ -593,7 +593,9 @@ body.chart-open #hud, body.chart-open #damage-container { opacity: 0; transition
         <div class="help-col"><h4>⌨️ Keyboard &amp; TV remote</h4><dl>
           <dt>A / D</dt><dd>Steer (hold)</dd>
           <dt>W / S · ▲ ▼</dt><dd>Raise / lower sail</dd>
-          <dt>← / → · &lt; / &gt;</dt><dd>Fire port / starboard</dd>
+          <dt>Q / E · &lt; / &gt;</dt><dd>Fire port / starboard broadside</dd>
+          <dt>Z</dt><dd>Embark / Disembark dinghy &amp; shore</dd>
+          <dt>1 / 2 / 3 · Space</dt><dd>Cutlass / Spear / Axe · Attack / Harvest</dd>
           <dt>Remote ◀ ▶</dt><dd>Steer (TV remote only)</dd>
           <dt>Enter · OK</dt><dd>Dock, or fire the side with a ship in your line of fire</dd>
           <dt>M · 🗺️</dt><dd>Open the chart of the whole sea</dd>
@@ -3137,27 +3139,28 @@ var qrcode = function() {
         }
 
         // Handle on-foot & dinghy explorer hotkeys
-        if (typeof IslandExploration !== 'undefined' && IslandExploration.mode !== 'ship') {
-          if (k === '1') { IslandExploration.selectWeapon('cutlass'); e.preventDefault(); return; }
-          if (k === '2') { IslandExploration.selectWeapon('spear'); e.preventDefault(); return; }
-          if (k === '3') { IslandExploration.selectWeapon('axe'); e.preventDefault(); return; }
-          if (k === 'e' || k === 'f') { IslandExploration.handleInteract(); e.preventDefault(); return; }
-          if (k === ' ') { IslandExploration.attack(); e.preventDefault(); return; }
-        } else if (typeof IslandExploration !== 'undefined' && IslandExploration.mode === 'ship') {
-          if (k === 'e') {
-            IslandExploration.handleDisembarkBtn();
+        const exp = window.IslandExploration;
+        if (exp && exp.mode !== 'ship') {
+          if (k === '1') { exp.selectWeapon('cutlass'); e.preventDefault(); return; }
+          if (k === '2') { exp.selectWeapon('spear'); e.preventDefault(); return; }
+          if (k === '3') { exp.selectWeapon('axe'); e.preventDefault(); return; }
+          if (k === 'z' || k === 'f') { exp.handleInteract(); e.preventDefault(); return; }
+          if (k === ' ') { exp.attack(); e.preventDefault(); return; }
+        } else if (exp && exp.mode === 'ship') {
+          if (k === 'z') {
+            exp.handleDisembarkBtn();
             e.preventDefault();
             return;
           }
         }
 
-        // Keyboard: A/D steer, ← / → (or < / >) fire port / starboard.
+        // Keyboard: A/D steer, Q/E or ← / → (or < / >) fire port / starboard.
         // A TV remote only has arrows, so on TV browsers ← / → steer instead.
         const arrowsSteer = Settings.isTvBrowser();
         const steerL = k === 'a' || (arrowsSteer && k === 'ArrowLeft');
         const steerR = k === 'd' || (arrowsSteer && k === 'ArrowRight');
         const fireL = k === 'q' || k === ',' || k === '<' || (!arrowsSteer && k === 'ArrowLeft');
-        const fireR = k === '.' || k === '>' || (!arrowsSteer && k === 'ArrowRight');
+        const fireR = k === 'e' || k === '.' || k === '>' || (!arrowsSteer && k === 'ArrowRight');
         let handled = true;
         if (steerL) held.left = true;
         else if (steerR) held.right = true;
@@ -9706,7 +9709,7 @@ var qrcode = function() {
 
         playSound('splash');
         playSound('bosun_pipe');
-        showBanner("🛶 Disembarked on dinghy! Row for shore or board another vessel.");
+        showBanner("🛶 Disembarked on dinghy! Row for shore or board another vessel [Z].");
         updateUI();
       }
 
@@ -9732,7 +9735,7 @@ var qrcode = function() {
         mode = 'onfoot';
         playSound('splash');
         playSound('bell');
-        showBanner("🏝️ Ashore! Explore the island, hunt wild game, or harvest coconuts.");
+        showBanner("🏝️ Ashore! Explore the island, hunt wild game, or harvest coconuts [Z to board].");
         updateUI();
       }
 
@@ -9742,7 +9745,7 @@ var qrcode = function() {
         if (dinghyState.rower) dinghyState.rower.visible = true;
         mode = 'dinghy';
         playSound('splash');
-        showBanner("🛶 Aboard the dinghy! Row with [W/A/S/D].");
+        showBanner("🛶 Aboard the dinghy! Row with [W/A/S/D], press [Z] to land or board.");
         updateUI();
       }
 
@@ -10165,6 +10168,7 @@ var qrcode = function() {
         get coconuts() { return cocoCount; }
       };
     })();
+    window.IslandExploration = IslandExploration;
 
 
 
