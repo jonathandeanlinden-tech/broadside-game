@@ -3575,9 +3575,53 @@ var qrcode = function() {
         I.area = I.lobes.reduce((a, l) => a + l.rx * l.rz, 0);
       });
 
+      const allLobes = [];
+      ISLANDS.forEach(I => {
+        I.lobes.forEach(L => {
+          allLobes.push({ x: L.x, z: L.z, r: Math.max(L.rx, L.rz) });
+        });
+      });
+
       let coarseSeabed = null;
       function seabed(x, z) {
-        return -32 + 5 * fbm(x * 0.009 + 3.1, z * 0.009 - 7.7, 3);
+        let minD = 1e9;
+        for (let k = 0; k < allLobes.length; k++) {
+          const L = allLobes[k];
+          const dx = x - L.x, dz = z - L.z;
+          const d = Math.hypot(dx, dz) - L.r;
+          if (d < minD) minD = d;
+        }
+
+        // Near islands: seabed forms underwater shelves and landscapes jumping up and down (-4.5m to -22m)
+        // Only in deep sea (d > 140m): drops to full depth (-28m to -43m) with rich bathymetric contours
+        const shelfFactor = 1.0 - smooth(35.0, 140.0, minD);
+
+        // Stepped underwater shelves & jumping submarine landscapes
+        const sn1 = fbm(x * 0.007 + 5.1, z * 0.007 - 3.4, 3);
+        const sn2 = noise(x * 0.016 - 2.8, z * 0.016 + 6.3) * 0.4;
+        const sn = (sn1 + sn2);
+        const uShelf = Math.max(0, Math.min(1, (sn + 1.1) / 2.2));
+
+        const step = uShelf * 3.0;
+        const sIdx = Math.min(2, Math.floor(step));
+        const sFrac = step - sIdx;
+        const sSmooth = smooth(0.20, 0.80, sFrac);
+        const shelfLevels = [-5.2, -9.6, -15.2, -22.0];
+        let shelfH = shelfLevels[sIdx] + (shelfLevels[sIdx + 1] - shelfLevels[sIdx]) * sSmooth;
+
+        // Submerged ridges and saddles between islands
+        const ridge = (1.0 - Math.abs(noise(x * 0.02 + 1.5, z * 0.02 - 4.2))) * 1.8;
+        const mounds = noise(x * 0.035, z * 0.035) * 0.9;
+        shelfH += (ridge + mounds);
+
+        // Deep sea contours (full depth is NOT flat! Contours, trenches, seamounts, abyssal hills)
+        const trench = smooth(0.15, 0.85, Math.abs(fbm(x * 0.004 + 1.2, z * 0.004 - 6.5, 3)));
+        const seamount = Math.max(0, fbm(x * 0.006 + 8.0, z * 0.006 + 2.0, 3));
+        const abyssalContours = noise(x * 0.015 + 3.3, z * 0.015 - 1.1) * 2.8 
+                              + noise(x * 0.03 + 7.7, z * 0.03 - 5.5) * 1.4;
+        const deepSeaH = -34.0 - 8.0 * trench + 6.0 * seamount + abyssalContours;
+
+        return deepSeaH + (shelfH - deepSeaH) * shelfFactor;
       }
 
       function islandHeight(I, x, z) {
@@ -3598,7 +3642,7 @@ var qrcode = function() {
           let h;
 
           if (I.type === 'shoal') {
-            // Submerged shoals: 10-15% shallows shelf around crest, then drop into deep ocean
+            // Submerged shoals: 10-15% shallows shelf around crest, then merge with local seabed shelf
             if (t <= 1.0) {
               h = I.top + 0.35 * fbm(x * 0.16, z * 0.16, 2) * (1 - t);
             } else if (t <= 1.35) {
@@ -3606,14 +3650,14 @@ var qrcode = function() {
               h = I.top - 2.8 * smooth(0, 1, u);
             } else {
               const u = Math.min(1.0, (t - 1.35) / 1.15);
-              h = I.top - 2.8 - 28.0 * smooth(0, 1, u);
+              h = I.top - 2.8 - 18.0 * smooth(0, 1, u);
             }
           } else {
             // Universal Island Physics Calculation:
             // 1) Land inside: 0 <= t < 0.75 (the rest of the 100%, and up to 100-400% for larger islands)
             // 2) Sandy beach: 0.75 <= t <= 1.0 (20-25% profile, gradual 5-20 deg dip)
             // 3) The shallows: 1.0 < t <= 1.35 (1 to 3-5m depth around coast, connecting shallow landing areas between close islands)
-            // 4) Continental slope: t > 1.35 (gently slopes from -3.8m down to -32m deep ocean floor)
+            // 4) Continental slope: t > 1.35 (descends to merge with the local underwater shelf landscape)
             // 5) Rocky flank: exposed cliff face & sea stacks
 
             const rockFlankAngle = 2.3; // prevailing northwest ocean swell
@@ -3637,9 +3681,9 @@ var qrcode = function() {
                 const u = (t - 1.05) / 0.30;
                 h = -1.5 - 2.5 * smooth(0, 1, u);
               } else {
-                // Continental slope into deep ocean floor (dropping to 30m+)
+                // Descends to merge with the local underwater shelf
                 const u = Math.min(1.0, (t - 1.35) / 1.15);
-                h = -4.0 - 28.0 * smooth(0, 1, u);
+                h = -4.0 - 18.0 * smooth(0, 1, u);
               }
             } else {
               // Gentle sandy beach flank (70-80% of perimeter, following user's exact specification):
@@ -3662,9 +3706,9 @@ var qrcode = function() {
                 const u = (t - 1.00) / 0.35;
                 h = -3.8 * smooth(0.0, 1.0, u);
               } else {
-                // Drop into deep ocean: gradual continental slope from -3.8m down to -32m (30m+)
+                // Apron slope descending to meet the local underwater shelf
                 const u = Math.min(1.0, (t - 1.35) / 1.15);
-                h = -3.8 - 28.2 * smooth(0.0, 1.0, u);
+                h = -3.8 - 18.2 * smooth(0.0, 1.0, u);
               }
             }
           }
