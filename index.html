@@ -3568,7 +3568,7 @@ var qrcode = function() {
         let r = 0;
         I.lobes.forEach(l => {
           const maxR = Math.max(l.rx, l.rz);
-          const shelfReach = maxR * 0.45 + 16;
+          const shelfReach = maxR * 1.5 + 35;
           r = Math.max(r, Math.hypot(l.x - cx, l.z - cz) + maxR + shelfReach);
         });
         I.cx = cx; I.cz = cz; I.br = r;
@@ -3577,7 +3577,7 @@ var qrcode = function() {
 
       let coarseSeabed = null;
       function seabed(x, z) {
-        return -22 + 7 * fbm(x * 0.009 + 3.1, z * 0.009 - 7.7, 3);
+        return -32 + 5 * fbm(x * 0.009 + 3.1, z * 0.009 - 7.7, 3);
       }
 
       function islandHeight(I, x, z) {
@@ -3587,7 +3587,7 @@ var qrcode = function() {
         for (const L of I.lobes) {
           const R = (L.rx + L.rz) * 0.5;
           const t0 = Math.hypot((x - L.x) / L.rx, (z - L.z) / L.rz);
-          if ((t0 - 1) * R < 50) { near = true; break; }
+          if ((t0 - 1) * R < 85) { near = true; break; }
         }
         if (!near) return -1e9;
         const warp = 1 + 0.12 * fbm(x * 0.05, z * 0.05, 2) + 0.04 * noise(x * 0.18, z * 0.18);
@@ -3601,20 +3601,20 @@ var qrcode = function() {
             // Submerged shoals: 10-15% shallows shelf around crest, then drop into deep ocean
             if (t <= 1.0) {
               h = I.top + 0.35 * fbm(x * 0.16, z * 0.16, 2) * (1 - t);
-            } else if (t <= 1.15) {
-              const u = (t - 1.0) / 0.15;
-              h = I.top - 2.5 * smooth(0, 1, u);
+            } else if (t <= 1.35) {
+              const u = (t - 1.0) / 0.35;
+              h = I.top - 2.8 * smooth(0, 1, u);
             } else {
-              const u = Math.min(1.0, (t - 1.15) / 0.22);
-              h = I.top - 2.5 - 18.0 * smooth(0, 1, u);
+              const u = Math.min(1.0, (t - 1.35) / 1.15);
+              h = I.top - 2.8 - 28.0 * smooth(0, 1, u);
             }
           } else {
             // Universal Island Physics Calculation:
             // 1) Land inside: 0 <= t < 0.75 (the rest of the 100%, and up to 100-400% for larger islands)
             // 2) Sandy beach: 0.75 <= t <= 1.0 (20-25% profile, gradual 5-20 deg dip)
-            // 3) The shallows: 1.0 < t <= 1.15 (10-15% profile, gradual 5-20 deg dip to -3.8m)
-            // 4) Drop into deep: t > 1.15 (plunges down to -22m)
-            // 5) Rocky flank: exposed cliff face & sea stacks (as shown in diagram)
+            // 3) The shallows: 1.0 < t <= 1.35 (1 to 3-5m depth around coast, connecting shallow landing areas between close islands)
+            // 4) Continental slope: t > 1.35 (gently slopes from -3.8m down to -32m deep ocean floor)
+            // 5) Rocky flank: exposed cliff face & sea stacks
 
             const rockFlankAngle = 2.3; // prevailing northwest ocean swell
             const flankDot = Math.cos(ang - rockFlankAngle);
@@ -3627,19 +3627,19 @@ var qrcode = function() {
                 const hills = 0.85 + 0.35 * fbm(x * 0.08 + 11, z * 0.08 - 5, 2);
                 h = 3.2 + Math.max(0, L.h - 3.2) * Math.pow(u, 1.15) * hills;
               } else if (t <= 1.05) {
-                // Steep cliff drop from 3.2m to -1.8m (slope > 0.50 = rock cliff face)
+                // Steep cliff drop from 3.2m to -1.5m (slope > 0.50 = rock cliff face)
                 const u = (t - 0.88) / 0.17;
-                h = 3.2 - 5.0 * smooth(0, 1, u);
+                h = 3.2 - 4.7 * smooth(0, 1, u);
                 // Boulders / sea stacks along the base (as in diagram)
                 if (noise(x * 0.25, z * 0.25) > 0.35) h += 1.8 * Math.sin(t * 18.0 + ang * 6.0);
-              } else if (t <= 1.18) {
-                // Submerged rocky ledge dipping to shelf edge
-                const u = (t - 1.05) / 0.13;
-                h = -1.8 - 2.4 * smooth(0, 1, u);
+              } else if (t <= 1.35) {
+                // Submerged rocky ledge / shallows (1.5m to 4.0m) connecting to neighboring shallows
+                const u = (t - 1.05) / 0.30;
+                h = -1.5 - 2.5 * smooth(0, 1, u);
               } else {
-                // Steep drop into deep ocean floor
-                const u = Math.min(1.0, (t - 1.18) / 0.20);
-                h = -4.2 - 17.8 * smooth(0, 1, u);
+                // Continental slope into deep ocean floor (dropping to 30m+)
+                const u = Math.min(1.0, (t - 1.35) / 1.15);
+                h = -4.0 - 28.0 * smooth(0, 1, u);
               }
             } else {
               // Gentle sandy beach flank (70-80% of perimeter, following user's exact specification):
@@ -3656,14 +3656,15 @@ var qrcode = function() {
                 // Sandy beach (20-25%): gradual dip (5-20 deg) from 2.0m down to 0.0m waterline
                 const u = (1.00 - t) / 0.25;
                 h = 2.0 * Math.pow(smooth(0.0, 1.0, u), 0.95);
-              } else if (t <= 1.15) {
-                // The shallows (10-15%): gradual dip (5-20 deg) from 0.0m down to -3.8m
-                const u = (t - 1.00) / 0.15;
+              } else if (t <= 1.35) {
+                // The shallows (1 to 3-5m depth around the coast): gradual dip to -3.8m
+                // Connects landing shallow areas between islands that are close by
+                const u = (t - 1.00) / 0.35;
                 h = -3.8 * smooth(0.0, 1.0, u);
               } else {
-                // Drop into the deep: steep plunge from -3.8m down to -22.0m ocean floor
-                const u = Math.min(1.0, (t - 1.15) / 0.20);
-                h = -3.8 - 18.2 * smooth(0.0, 1.0, u);
+                // Drop into deep ocean: gradual continental slope from -3.8m down to -32m (30m+)
+                const u = Math.min(1.0, (t - 1.35) / 1.15);
+                h = -3.8 - 28.2 * smooth(0.0, 1.0, u);
               }
             }
           }
@@ -3721,7 +3722,7 @@ var qrcode = function() {
       ISLANDS.forEach(I => mark(I.cx - I.br, I.cz - I.br, I.cx + I.br, I.cz + I.br, (k, tx, tz) => {
         const cx = MIN_X + (tx + 0.5) * TILE, cz = MIN_Z + (tz + 0.5) * TILE;
         const hit = I.lobes.some(L => {
-          const R = (L.rx + L.rz) * 0.5, reach = R * 0.45 + 18;
+          const R = (L.rx + L.rz) * 0.5, reach = R * 1.5 + 35;
           const dt = Math.hypot((cx - L.x) / L.rx, (cz - L.z) / L.rz);
           return (dt - 1) * Math.min(L.rx, L.rz) - TILE * 0.75 < reach;
         });
@@ -4843,11 +4844,11 @@ var qrcode = function() {
         // Pure tropical water body color: clear aqua tint in shallows,
         // so the radiant golden coral sand at the bottom shines through
         // and physically gives the shallow water its world-famous turquoise color!
-        // Pure transparent Caribbean water: crystal-clear tropical turquoise tint across the surface.
-        // There is NO dark blue dye on the surface mesh!
+        // Pure transparent Caribbean water: crystal-clear tropical turquoise tint across the entire top surface layer.
+        // Surface mesh carries a luminous turquoise hue that multiplies gently over the bottom depths.
         // The deep parts of the ocean have their dark blue colour at the bottom on the seabed,
         // so looking into the water looks directly into the depth.
-        vec3 waterColor = mix(vec3(0.012, 0.06, 0.12), vec3(0.06, 0.68, 0.78), uDayFactor);
+        vec3 waterColor = mix(vec3(0.015, 0.08, 0.15), vec3(0.05, 0.76, 0.84), uDayFactor);
 
         // Realistic Voronoi caustic shimmer in shallow Caribbean water volume
         // Strictly 40% of the light from the sky: soft turquoise shimmer by day,
@@ -4925,12 +4926,12 @@ var qrcode = function() {
           waterColor = mix(waterColor, vec3(0.86, 0.93, 1.0) * (0.45 + 0.55 * uDayFactor), clamp(rings, 0.0, 1.0) * 0.5 * uRain);
         }
 
-        // Truly transparent Caribbean water: looking down looks straight INTO THE DEPTH!
-        // At the bottom of the depth, the seabed carries the physical colors (golden sand, turquoise reef, azure shelf, dark blue abyss floor).
-        // Surface opacity when looking straight down is low (0.08 to 0.18) so the water looks clear, not dyed.
-        float opticalAlpha = 0.08 + 0.10 * (1.0 - exp(-waterDepth * 0.06));
+        // Truly transparent Caribbean water with slight turquoise multiply effect:
+        // Clear water foundation lets the bottom detail and caustics dance through,
+        // while the top water layer adds a subtle, luminous tropical turquoise filter.
+        float opticalAlpha = 0.22 + 0.16 * (1.0 - exp(-waterDepth * 0.05));
         // Glancing view toward horizon reflects sky and becomes opaque via Fresnel
-        float waterAlpha = mix(clamp(opticalAlpha, 0.08, 0.94), 0.98, fresnel * 0.75);
+        float waterAlpha = mix(clamp(opticalAlpha, 0.22, 0.94), 0.98, fresnel * 0.75);
         // Shoreline surf and foam are opaque white
         waterAlpha = max(waterAlpha, foamAmt * 0.94);
 
@@ -5226,7 +5227,7 @@ var qrcode = function() {
       sand: [1.08, 0.86, 0.42], // rich golden-yellow Caribbean sand
       sandWet: [0.88, 0.70, 0.34], // warm moist yellow sand
       reefSand: [1.02, 0.85, 0.42], // vibrant sunlit yellow shallow reef sand
-      reefCoral: [0.18, 0.65, 0.70], // vibrant tropical Caribbean lagoon turquoise
+      reefCoral: [0.15, 0.70, 0.74], // vibrant tropical Caribbean lagoon turquoise
       shelfSlope: [0.06, 0.32, 0.54], // coastal azure ocean shelf
       cliff: [0.14, 0.14, 0.18], cliffWarm: [0.26, 0.18, 0.17], cliffDark: [0.09, 0.09, 0.11],
       deep: [0.03, 0.18, 0.38], abyssFloor: [0.015, 0.10, 0.26], seagrass: [0.18, 0.38, 0.22]
@@ -5253,40 +5254,41 @@ var qrcode = function() {
         const I = Terrain.islandAt(x, z), type = I ? I.type : 'sea';
         if (h < -0.2) {
           // Smooth continuous bathymetric depth gradient under the water:
-          // d = 0m to 3.8m: the shallows (10-15% shelf, gradual 5-20 deg dip) with radiant golden reef sand (reefSand)
-          //                 and vibrant tropical Caribbean turquoise coral lagoon (reefCoral)
-          // d > 3.8m: drop into deep ocean (shelfSlope -> dark cobalt abyssFloor)
+          // d = 0m to 4.0m: the shallows (1 to 3-5m depth around the coast, forming connecting shallow sandbars between close islands)
+          //                 with radiant golden reef sand (reefSand) and vibrant tropical Caribbean turquoise coral lagoon (reefCoral)
+          // d = 4.0m to 12.0m: shelfSlope (coastal azure shelf)
+          // d > 12.0m: drop into deep ocean (dropping to 30m+ abyssal cobalt floor)
           const d = -h;
           const isBlack = I && (I.black || type === 'volcano');
           const shallowSand = isBlack ? blackSand : reefSand;
 
           c.copy(shallowSand);
           // Transition 1: golden sand -> vibrant tropical turquoise reef coral
-          const t1 = Terrain.smooth(1.0, 3.8, d);
+          const t1 = Terrain.smooth(0.8, 4.0, d);
           if (t1 > 0.0) {
             c.lerp(reefCoral, t1);
             if (slope > 0.40) c.lerp(rock, 0.45 * Terrain.smooth(0.40, 0.75, slope));
           }
-          // Seagrass patches in sheltered shallows (0.8m to 3.5m)
-          if (!isBlack && n2 > 0.28 && d < 4.0 && slope < 0.25) {
-            const grassMask = Terrain.smooth(0.28, 0.72, n2) * (1.0 - Terrain.smooth(2.5, 4.0, d)) * 0.40;
+          // Seagrass patches in sheltered shallows (0.8m to 4.0m)
+          if (!isBlack && n2 > 0.28 && d < 4.5 && slope < 0.25) {
+            const grassMask = Terrain.smooth(0.28, 0.72, n2) * (1.0 - Terrain.smooth(2.8, 4.5, d)) * 0.40;
             c.lerp(seagrass, grassMask);
           }
           // Transition 2: reef coral -> coastal azure shelf
-          const t2 = Terrain.smooth(3.5, 10.0, d);
+          const t2 = Terrain.smooth(3.8, 12.0, d);
           if (t2 > 0.0) {
             c.lerp(shelfSlope, t2);
-            if (slope > 0.45 && d < 12.0) c.lerp(rock, 0.35 * Terrain.smooth(0.45, 0.8, slope));
+            if (slope > 0.45 && d < 14.0) c.lerp(rock, 0.35 * Terrain.smooth(0.45, 0.8, slope));
           }
-          // Transition 3: coastal azure -> abyssal cobalt floor
-          const t3 = Terrain.smooth(9.0, 18.0, d);
+          // Transition 3: coastal azure -> abyssal cobalt floor (dropping to 30m+)
+          const t3 = Terrain.smooth(11.0, 26.0, d);
           if (t3 > 0.0) {
             c.lerp(abyssFloor, t3);
             if (slope > 0.55) c.lerp(rockDark, 0.40 * Terrain.smooth(0.55, 0.9, slope));
           }
           // Subtle organic sediment ripple in the deep sea
-          if (d > 16.0) {
-            const ripple = Terrain.noise(x * 0.08, z * 0.08) * 0.04;
+          if (d > 24.0) {
+            const ripple = Terrain.noise(x * 0.08, z * 0.08) * 0.03;
             c.addScalar(ripple);
           }
         } else if (type === 'volcano') {
@@ -5409,6 +5411,11 @@ var qrcode = function() {
           'gl_FragColor = vec4( outgoingLight, diffuseColor.a );',
           `if (vTerrainWorldPos.y < 0.25) {
              float uDepth = max(0.0, -vTerrainWorldPos.y);
+             // Physical water column light transmission ('multiply' effect):
+             // Red wavelengths attenuate first, leaving luminous tropical turquoise / cyan underwater light
+             vec3 waterTransmission = exp(-vec3(0.065, 0.016, 0.003) * uDepth);
+             outgoingLight *= mix(vec3(1.0), waterTransmission, clamp(uTerrainDayFactor, 0.0, 1.0));
+
              // Razor sharp in shallows (0.05m - 3.5m), softly diffusing down to 12m
              float depthFade = smoothstep(0.02, 0.22, uDepth) * (1.0 - smoothstep(3.8, 12.5, uDepth));
              if (depthFade > 0.002) {
