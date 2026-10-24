@@ -3788,6 +3788,7 @@ var qrcode = function() {
       } catch (err) { console.debug('Audio init failed', err); }
       UI.onAudioState(!!audioCtx && audioCtx.state === 'running');
       VO.load();
+      if (typeof Ambience !== 'undefined' && Ambience.start) Ambience.start();
     }
 
     function playSound(type) {
@@ -4737,31 +4738,19 @@ var qrcode = function() {
         vec3 naturalNormal = normalize(vNormal + vec3(-dSlope.x, 0.0, -dSlope.y) * 0.22);
 
         // =============================================================
-        // CARIBBEAN MULTI-DEPTH COLOR GRADATION (CALIBRATED TROPICAL DEPTH)
+        // CARIBBEAN MULTI-DEPTH COLOR GRADATION & TRANSPARENCY
         // =============================================================
-        // Saturated storybook blues: rich open sea, crisp cyan ring around the islands
-        vec3 colDeepTrench  = mix(vec3(0.006, 0.030, 0.08), vec3(0.036, 0.190, 0.320), uDayFactor);
-        vec3 colMidOcean    = mix(vec3(0.010, 0.050, 0.12), vec3(0.060, 0.270, 0.420), uDayFactor);
-        vec3 colReefTeal    = mix(vec3(0.015, 0.160, 0.22), vec3(0.060, 0.400, 0.580), uDayFactor);
-        vec3 colTurquoise   = mix(vec3(0.025, 0.220, 0.28), vec3(0.090, 0.580, 0.720), uDayFactor);
-        vec3 colShoreAqua   = mix(vec3(0.060, 0.280, 0.34), vec3(0.200, 0.680, 0.720), uDayFactor);
-        vec3 colSandShallow = mix(vec3(0.090, 0.320, 0.34), vec3(0.230, 0.650, 0.660), uDayFactor);
+        // Pure tropical water body color: clear aqua tint in shallows,
+        // so the radiant golden coral sand at the bottom shines through
+        // and physically gives the shallow water its world-famous turquoise color!
+        vec3 colShallow = mix(vec3(0.015, 0.08, 0.12), vec3(0.08, 0.62, 0.72), uDayFactor);
+        vec3 colMid     = mix(vec3(0.010, 0.045, 0.10), vec3(0.04, 0.32, 0.48), uDayFactor);
+        vec3 colDeep    = mix(vec3(0.005, 0.020, 0.06), vec3(0.025, 0.16, 0.32), uDayFactor);
 
-        // Depth bands: navy ocean -> blue -> reef teal -> turquoise -> aqua over sand
-        vec3 waterColor = colDeepTrench;
-        waterColor = mix(waterColor, colMidOcean, 1.0 - smoothstep(9.0, 20.0, waterDepth));
-        waterColor = mix(waterColor, colReefTeal, 1.0 - smoothstep(4.0, 9.0, waterDepth));
-        waterColor = mix(waterColor, colTurquoise, 1.0 - smoothstep(2.0, 4.6, waterDepth));
-        waterColor = mix(waterColor, colShoreAqua, 1.0 - smoothstep(0.5, 1.8, waterDepth));
-        waterColor = mix(waterColor, colSandShallow, 1.0 - smoothstep(0.0, 0.6, waterDepth));
-
-        // Organic, Soft Caustic Sunlight in Shallows (Subtle Refraction, not blown out)
-        float c1 = sin(p1 * 0.8 + cos(p2 * 0.6));
-        float c2 = cos(p3 * 0.7 + sin(p4 * 0.5));
-        float organicCaustic = pow(max(0.0, c1 * c2), 2.2);
-        float causticIntensity = smoothstep(0.35, 0.95, landProximity) * (0.20 + 0.30 * uDayFactor);
-        vec3 causticCol = mix(vec3(0.12, 0.70, 0.72), vec3(0.60, 0.90, 0.88), organicCaustic);
-        waterColor += causticCol * organicCaustic * causticIntensity * 0.16;
+        float depthT1 = clamp(waterDepth / 6.0, 0.0, 1.0);
+        float depthT2 = clamp((waterDepth - 6.0) / 14.0, 0.0, 1.0);
+        vec3 waterColor = mix(colShallow, colMid, depthT1);
+        waterColor = mix(waterColor, colDeep, depthT2);
 
         // Subtle soft cloud shadows
         vec2 cloudUV = (vWorldPos.xz + vec2(uTime * 2.8, -uTime * 1.5)) * 0.005;
@@ -4773,23 +4762,18 @@ var qrcode = function() {
         vec3 lightDir = normalize(uSunDir);
         vec3 viewDir = normalize(cameraPosition - vWorldPos);
         float nDotL = max(dot(naturalNormal, lightDir), 0.0);
-        waterColor += waterColor * nDotL * (0.12 + 0.22 * uDayFactor);
+        waterColor += waterColor * nDotL * (0.10 + 0.20 * uDayFactor);
 
         // Subsurface scattering (sunlight filtering through wave swell crests)
         float sss = pow(max(dot(viewDir, -lightDir), 0.0), 4.0) * max(0.0, vWaveHeight + 0.20);
-        waterColor += vec3(0.08, 0.65, 0.55) * sss * 0.35 * uDayFactor;
-
-        // Fresnel reflection of sky using natural normal
-        float fresnel = pow(1.0 - max(dot(viewDir, naturalNormal), 0.0), 4.0);
-        vec3 horizonSkyCol = mix(vec3(0.03, 0.06, 0.12), mix(vec3(0.55, 0.78, 0.90), vec3(0.96, 0.44, 0.16), uDawnDuskFactor), uDayFactor);
-        waterColor = mix(waterColor, horizonSkyCol, fresnel * 0.35);
+        waterColor += vec3(0.08, 0.65, 0.55) * sss * 0.30 * uDayFactor;
 
         // ORGANIC SUN / MOON SPECULAR GLITTER (No grid artifacts)
         vec3 halfVec = normalize(lightDir + viewDir);
         float nDotH = max(dot(naturalNormal, halfVec), 0.0);
-        float specBroad = pow(nDotH, 24.0);
-        float specSharp = pow(nDotH, 140.0);
-        float totalSpec = specBroad * 0.12 + specSharp * 0.45; // softer, cleaner highlights
+        float specBroad = pow(nDotH, 20.0);
+        float specSharp = pow(nDotH, 120.0);
+        float totalSpec = specBroad * 0.12 + specSharp * 0.55;
 
         // Real-Time Directional Soft Shadow from ship hulls, masts, sails, trees, and fortresses
         float shadow = getShadowMask();
@@ -4797,14 +4781,19 @@ var qrcode = function() {
         totalSpec *= shadow;
 
         vec3 specCol = mix(vec3(0.65, 0.85, 1.0), mix(vec3(1.0, 0.96, 0.88), vec3(1.0, 0.65, 0.35), uDawnDuskFactor), uDayFactor);
-        waterColor += specCol * totalSpec * (0.12 + 0.60 * uDayFactor);
+        waterColor += specCol * totalSpec * (0.15 + 0.80 * uDayFactor);
 
-        // Deep Sea Wave Crest Foam (reduced to ~15% soft translucent sea froth, broken up organically)
-        float crestHeight = smoothstep(0.22, 0.36, vWaveHeight);
+        // Fresnel reflection of sky using natural normal
+        float fresnel = pow(1.0 - max(dot(viewDir, naturalNormal), 0.0), 3.5);
+        vec3 horizonSkyCol = mix(vec3(0.03, 0.06, 0.12), mix(vec3(0.55, 0.78, 0.90), vec3(0.96, 0.44, 0.16), uDawnDuskFactor), uDayFactor);
+        waterColor = mix(waterColor, horizonSkyCol, fresnel * 0.45);
+
+        // Deep Sea Wave Crest Foam (sparse little white wave tips)
+        float crestHeight = smoothstep(0.24, 0.38, vWaveHeight);
         float crestNoise = sin(p1 * 1.8) * cos(p2 * 2.2) + sin(p3 * 2.8);
         float crestOrganic = crestHeight * smoothstep(-0.1, 0.7, crestNoise);
-        vec3 crestFoamCol = mix(waterColor, vec3(0.85, 0.94, 1.0), 0.45);
-        waterColor = mix(waterColor, crestFoamCol, smoothstep(0.35, 0.6, crestOrganic) * 0.35 * (0.4 + 0.6 * uDayFactor)); // sparse little white wave tips
+        vec3 crestFoamCol = mix(waterColor, vec3(0.85, 0.94, 1.0), 0.55);
+        waterColor = mix(waterColor, crestFoamCol, smoothstep(0.35, 0.6, crestOrganic) * 0.35 * (0.4 + 0.6 * uDayFactor));
 
         // Shoreline surf: foam bands that roll in toward the beach, plus a thin white edge
         float wobble = sin(vWorldPos.x * 0.35 + uTime * 0.7) * 0.6 + sin(vWorldPos.z * 0.29 - uTime * 0.5) * 0.6;
@@ -4816,7 +4805,7 @@ var qrcode = function() {
         float crestBreak = smoothstep(1.3, 0.55, waterDepth) * smoothstep(0.15, 0.4, waterDepth)
                          * smoothstep(0.55, 1.0, sin(uTime * 1.3 + dot(vWorldPos.xz, vec2(0.21, 0.27)) + wobble * 1.5)) * 0.55;
         float foamAmt = max(max(max(surfBand * 0.25, edgeFoam * 0.95), crestBreak * 0.7), rim2 * 0.3);
-        waterColor = mix(waterColor, vec3(0.96, 0.99, 1.0), foamAmt * (0.55 + 0.45 * uDayFactor));
+        waterColor = mix(waterColor, vec3(0.97, 0.99, 1.0), foamAmt * (0.55 + 0.45 * uDayFactor));
 
         // Rain on the sea: a duller, darker surface peppered with spreading drop rings
         if (uRain > 0.02) {
@@ -4825,9 +4814,15 @@ var qrcode = function() {
           waterColor = mix(waterColor, vec3(0.86, 0.93, 1.0) * (0.45 + 0.55 * uDayFactor), clamp(rings, 0.0, 1.0) * 0.5 * uRain);
         }
 
-        // See-through shallows: the sandy seabed and coral show through clear water
-        float waterAlpha = mix(0.72, 0.97, smoothstep(0.2, 6.0, waterDepth));
-        waterAlpha = max(waterAlpha, foamAmt * 0.9);
+        // Crystal-clear see-through shallows: the sandy seabed and coral show through clear water!
+        // Optical transmittance follows exponential depth extinction:
+        // In shallows (< 1.5m), opacity is low (0.06 - 0.18), allowing the bright sand to shine through!
+        float opticalAlpha = 1.0 - exp(-waterDepth * 0.09);
+        // Glancing view toward horizon reflects sky and becomes opaque
+        float waterAlpha = mix(clamp(opticalAlpha, 0.06, 0.96), 0.98, fresnel * 0.65);
+        // Shoreline surf and foam are opaque white
+        waterAlpha = max(waterAlpha, foamAmt * 0.94);
+
         // fog banks (weather and the edge of the charts) roll over the sea too
         float fogD = uFogDensity * length(cameraPosition - vWorldPos);
         float fogF = 1.0 - exp(-fogD * fogD);
@@ -4856,7 +4851,8 @@ var qrcode = function() {
       fragmentShader: oceanFragmentShader,
       uniforms: oceanUniforms,
       lights: true,
-      transparent: true
+      transparent: true,
+      depthWrite: false
     });
 
     oceanMat.uniforms.uDepthTex.value = depthTexture; // UniformsUtils.merge clones textures; use the real one
@@ -5115,10 +5111,10 @@ var qrcode = function() {
     // Art-target colours for the terrain (linear, pre-lighting). Display ≈ ACES(lighting × value).
     const TERRAIN_STYLE = {
       grass: [0.41, 0.47, 0.085], grassLight: [0.51, 0.54, 0.13], grassDark: [0.31, 0.38, 0.075],
-      path: [1.05, 0.88, 0.62], sand: [1.0, 0.86, 0.6], sandWet: [0.62, 0.52, 0.36],
-      reefSand: [0.82, 0.74, 0.52], reefCoral: [0.24, 0.28, 0.26], shelfSlope: [0.08, 0.20, 0.28],
+      path: [1.05, 0.88, 0.62], sand: [1.02, 0.90, 0.68], sandWet: [0.94, 0.84, 0.64],
+      reefSand: [0.98, 0.88, 0.66], reefCoral: [0.26, 0.34, 0.32], shelfSlope: [0.09, 0.22, 0.30],
       cliff: [0.13, 0.135, 0.17], cliffWarm: [0.25, 0.18, 0.17], cliffDark: [0.08, 0.08, 0.1],
-      deep: [0.045, 0.11, 0.19], abyssFloor: [0.025, 0.065, 0.13], seagrass: [0.16, 0.3, 0.2]
+      deep: [0.045, 0.11, 0.19], abyssFloor: [0.025, 0.065, 0.13], seagrass: [0.18, 0.38, 0.22]
     };
     // 0 on a winding dirt path, rising to 1 away from it (shared by terrain colour + vegetation placement)
     const pathField = (x, z) => Math.abs(Terrain.noise(x * 0.05 + 3, z * 0.05 - 8) + 0.125 * Terrain.noise(x * 0.11, z * 0.11 + 4));
@@ -5142,24 +5138,23 @@ var qrcode = function() {
         const I = Terrain.islandAt(x, z), type = I ? I.type : 'sea';
         if (h < -0.2) {
           // Continuous bathymetric depth gradient:
-          // 0 to -1.5m: shallow sand / reef sand
-          // -1.5m to -5m: submerged sandbar with coral reef rocks and seagrass meadows
-          // -5m to -12m: reef slope with coral stone, deeper blue-green shelf
-          // -12m to -20m: continental drop-off, marine sediment
-          // < -20m: abyssal ocean floor (deep navy-slate sediment with subtle noise ripples)
+          // 0 to -2.8m: radiant golden coral sandbars visible through clear water
+          // -2.8m to -10m: submerged sandbar with coral reef rocks and seagrass meadows
+          // -10m to -18m: reef slope with coral stone, deeper blue-green shelf
+          // < -18m: abyssal ocean floor (deep marine sediment)
           const isBlack = I && (I.black || type === 'volcano');
-          const shallowSand = isBlack ? blackSand : (h > -0.8 ? sandWet : reefSand);
+          const shallowSand = isBlack ? blackSand : reefSand;
 
-          if (h > -2.5) {
-            c.copy(shallowSand).lerp(reefCoral, Terrain.smooth(0.8, 2.5, -h) * (slope > 0.4 ? 0.7 : 0.2));
-            if (n2 > 0.25 && !isBlack) c.lerp(seagrass, 0.5 * Terrain.smooth(0.25, 0.65, n2));
+          if (h > -2.8) {
+            c.copy(shallowSand).lerp(reefCoral, Terrain.smooth(1.2, 2.8, -h) * (slope > 0.4 ? 0.75 : 0.22));
+            if (n2 > 0.22 && !isBlack) c.lerp(seagrass, 0.55 * Terrain.smooth(0.22, 0.65, n2));
           } else if (h > -10.0) {
-            c.copy(reefCoral).lerp(shelfSlope, Terrain.smooth(2.5, 10.0, -h));
-            if (!isBlack && n2 > 0.35) c.lerp(seagrass, 0.35 * Terrain.smooth(0.35, 0.75, n2) * (1 - Terrain.smooth(5, 9, -h)));
-            if (slope > 0.5) c.lerp(rock, 0.4);
+            c.copy(reefCoral).lerp(shelfSlope, Terrain.smooth(2.8, 10.0, -h));
+            if (!isBlack && n2 > 0.32) c.lerp(seagrass, 0.35 * Terrain.smooth(0.32, 0.75, n2) * (1 - Terrain.smooth(5, 9, -h)));
+            if (slope > 0.45) c.lerp(rock, 0.45);
           } else if (h > -18.0) {
             c.copy(shelfSlope).lerp(deep, Terrain.smooth(10.0, 18.0, -h));
-            if (slope > 0.6) c.lerp(rockDark, 0.45);
+            if (slope > 0.55) c.lerp(rockDark, 0.5);
           } else {
             const ripple = Terrain.noise(x * 0.08, z * 0.08) * 0.08;
             c.copy(deep).lerp(abyssFloor, Terrain.smooth(18.0, 24.0, -h)).addScalar(ripple);
@@ -5192,7 +5187,73 @@ var qrcode = function() {
         if (!chunks.has(key)) chunks.set(key, []);
         chunks.get(key).push(tile);
       });
+      const terrainUniforms = {
+        uTerrainTime: { value: 0 },
+        uTerrainDayFactor: { value: 1.0 },
+        uTerrainSunDir: { value: new THREE.Vector3(50, 85, 45) }
+      };
+      Terrain.uniforms = terrainUniforms;
+
       const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0.0, flatShading: true });
+      mat.onBeforeCompile = function (shader) {
+        shader.uniforms.uTerrainTime = terrainUniforms.uTerrainTime;
+        shader.uniforms.uTerrainDayFactor = terrainUniforms.uTerrainDayFactor;
+        shader.uniforms.uTerrainSunDir = terrainUniforms.uTerrainSunDir;
+
+        shader.vertexShader = shader.vertexShader.replace(
+          '#include <common>',
+          '#include <common>\nvarying vec3 vTerrainWorldPos;\n'
+        );
+        shader.vertexShader = shader.vertexShader.replace(
+          '#include <begin_vertex>',
+          '#include <begin_vertex>\nvTerrainWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;\n'
+        );
+
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <common>',
+          `#include <common>
+           uniform float uTerrainTime;
+           uniform float uTerrainDayFactor;
+           uniform vec3 uTerrainSunDir;
+           varying vec3 vTerrainWorldPos;
+
+           float getUnderwaterCaustic(vec2 p, float t) {
+             const vec2 d1 = vec2(0.866, 0.500);
+             const vec2 d2 = vec2(-0.383, 0.924);
+             const vec2 d3 = vec2(-0.766, -0.643);
+             const vec2 d4 = vec2(0.423, -0.906);
+
+             vec2 uv1 = p * 0.36 + d1 * (t * 0.75);
+             vec2 uv2 = p * 0.42 + d2 * (t * 0.65);
+             vec2 uv3 = p * 0.70 + d3 * (t * 0.95);
+             vec2 uv4 = p * 0.65 + d4 * (t * 0.85);
+
+             float w1 = sin(uv1.x + cos(uv1.y * 1.3));
+             float w2 = cos(uv2.y + sin(uv2.x * 1.2));
+             float w3 = sin(uv3.x * 1.15 - uv3.y * 0.85);
+             float w4 = cos(uv4.y * 1.25 + uv4.x * 0.75);
+
+             float cA = pow(max(0.0, 1.0 - abs(w1 + w2) * 0.58), 2.6);
+             float cB = pow(max(0.0, 1.0 - abs(w3 + w4) * 0.58), 2.6);
+             return cA * 0.60 + cB * 0.50;
+           }`
+        );
+
+        shader.fragmentShader = shader.fragmentShader.replace(
+          'gl_FragColor = vec4( outgoingLight, diffuseColor.a );',
+          `if (vTerrainWorldPos.y < 0.25) {
+             float uDepth = max(0.0, -vTerrainWorldPos.y);
+             float depthFade = smoothstep(0.02, 0.22, uDepth) * (1.0 - smoothstep(3.5, 12.0, uDepth));
+             if (depthFade > 0.002) {
+               float cVal = getUnderwaterCaustic(vTerrainWorldPos.xz, uTerrainTime);
+               float daylight = clamp(uTerrainDayFactor, 0.0, 1.0);
+               vec3 cCol = mix(vec3(0.18, 0.40, 0.55) * 0.25, vec3(0.60, 1.0, 0.95), daylight);
+               outgoingLight += cCol * (cVal * depthFade * (0.45 + 0.90 * daylight));
+             }
+           }
+           gl_FragColor = vec4( outgoingLight, diffuseColor.a );`
+        );
+      };
       const meshes = [];
       chunks.forEach(list => {
         const pos = [], col = [], idx = [];
@@ -12930,6 +12991,10 @@ var qrcode = function() {
         oceanMat.uniforms.uDawnDuskFactor.value = dawnDusk;
         oceanMat.uniforms.uRain.value = weather.rain;
         oceanMat.uniforms.uSunDir.value.copy(dayFactor > 0.35 ? sunDir : moonDir).multiplyScalar(100);
+        if (Terrain.uniforms) {
+          Terrain.uniforms.uTerrainDayFactor.value = dayFactor * (1 - weather.storm * 0.35);
+          Terrain.uniforms.uTerrainSunDir.value.copy(dayFactor > 0.35 ? sunDir : moonDir).multiplyScalar(100);
+        }
 
         // Rain streaks
         const nRain = Math.floor(RAIN_N * weather.rain);
@@ -13044,19 +13109,38 @@ var qrcode = function() {
     const Ambience = (() => {
       let started = false, noiseBuf = null, brownBuf = null;
       const g = {};
-      let duckUntil = 0, musicTimer = null, nextTime = 0, eighthIdx = 0, combatLevel = 0, waveT = 1, lapT = 1;
-      const midi = n => 440 * Math.pow(2, (n - 69) / 12);
-      // 8-bar progression, one chord per bar (6 eighths)
-      const PROG = [
-        { pad: [50, 53, 57], bass: 38 }, { pad: [48, 52, 55], bass: 36 }, { pad: [50, 53, 57], bass: 38 }, { pad: [45, 52, 57], bass: 45 },
-        { pad: [50, 53, 57], bass: 38 }, { pad: [48, 53, 57], bass: 41 }, { pad: [48, 52, 55], bass: 36 }, { pad: [50, 53, 57], bass: 38 }
-      ];
-      // two fiddle phrases (note, length in eighths); null = rest
-      const PHRASE_A = [[69, 2], [74, 1], [74, 2], [72, 1], [72, 2], [67, 1], [67, 2], [64, 1], [65, 2], [69, 1], [74, 2], [72, 1], [69, 3], [64, 3],
-        [69, 2], [74, 1], [74, 2], [76, 1], [77, 2], [76, 1], [74, 2], [72, 1], [72, 2], [71, 1], [67, 2], [64, 1], [62, 3], [null, 3]];
-      const PHRASE_B = [[74, 3], [72, 1], [69, 2], [67, 2], [69, 1], [72, 3], [74, 2], [76, 1], [77, 2], [76, 1], [76, 3], [72, 3],
-        [74, 2], [72, 1], [69, 2], [67, 1], [65, 2], [69, 1], [72, 3], [71, 2], [72, 1], [67, 3], [62, 6]];
-      let phrase = null, phraseIdx = 0, phraseLeft = 0;
+      let duckUntil = 0, combatLevel = 0, waveT = 1, lapT = 1;
+
+      // Background music from v9 (bgm.m4a)
+      let bgmAudio = null, bgmStarted = false;
+      const bgmBaseVol = 0.22;
+      let bgmDuckUntil = 0;
+
+      function bgmInit() {
+        if (bgmAudio) {
+          const musicOn = Settings.get('music') !== false && Settings.get('sound') !== false;
+          if (bgmAudio.paused && musicOn) bgmAudio.play().catch(() => {});
+          return;
+        }
+        try {
+          bgmAudio = new Audio('bgm.m4a');
+          bgmAudio.loop = true;
+          bgmAudio.preload = 'auto';
+          const musicOn = Settings.get('music') !== false && Settings.get('sound') !== false;
+          bgmAudio.volume = musicOn ? bgmBaseVol : 0;
+          const p = bgmAudio.play();
+          if (p && p.then) {
+            p.then(() => { bgmStarted = true; }).catch(() => { bgmStarted = false; });
+          }
+        } catch(e) {
+          console.warn('BGM init error:', e);
+        }
+      }
+
+      function bgmDuck(dur = 2.4, duckVol = 0.06) {
+        bgmDuckUntil = Math.max(bgmDuckUntil, performance.now() + dur * 1000);
+      }
+      window.bgmDuck = bgmDuck;
 
       function loopSrc(buf) {
         const s = audioCtx.createBufferSource();
@@ -13083,13 +13167,8 @@ var qrcode = function() {
         const gl = audioCtx.createOscillator(), glG = audioCtx.createGain();
         gl.frequency.value = 0.09; glG.gain.value = 0.3; gl.connect(glG); glG.connect(gust.gain); gl.start();
         wd.connect(wdF); wdF.connect(gust); gust.connect(wdG); wdG.connect(masterGain); g.wind = wdG;
-        // music bus with an echo send
-        g.music = audioCtx.createGain();
-        g.music.gain.value = 0;
-        g.music.connect(masterGain);
-        const send = audioCtx.createGain(); send.gain.value = 0.35; g.music.connect(send); send.connect(SFX.verbIn);
-        nextTime = audioCtx.currentTime + 0.4;
-        musicTimer = setInterval(scheduleMusic, 80);
+        // Background music from v9 (bgm.m4a)
+        bgmInit();
       }
 
       // ---- the sea ----
@@ -13209,7 +13288,20 @@ var qrcode = function() {
         g.rain.gain.value += (W.rain * 0.1 - g.rain.gain.value) * k;
         g.wind.gain.value += (W.storm * 0.06 + W.rain * 0.015 - g.wind.gain.value) * k;
         g.sea.gain.value += ((0.045 + W.storm * 0.05) - g.sea.gain.value) * k;
-        g.music.gain.value += ((Settings.get('music') === false ? 0 : (performance.now() < duckUntil ? 0.4 : 0.85)) - g.music.gain.value) * Math.min(1, dt * (performance.now() < duckUntil ? 4 : 1.2));
+        // Background music from v9 (bgm.m4a)
+        if (bgmAudio) {
+          const musicOn = Settings.get('music') !== false && Settings.get('sound') !== false;
+          if (!musicOn) {
+            if (bgmAudio.volume > 0.005) bgmAudio.volume = Math.max(0, bgmAudio.volume - dt * 0.4);
+            else if (!bgmAudio.paused) bgmAudio.pause();
+          } else {
+            if (bgmAudio.paused) bgmAudio.play().catch(() => {});
+            const target = (performance.now() < bgmDuckUntil || performance.now() < duckUntil) ? 0.06 : bgmBaseVol;
+            bgmAudio.volume += (target - bgmAudio.volume) * Math.min(1, dt * 2.5);
+          }
+        } else if (started) {
+          bgmInit();
+        }
         combatLevel += ((combat ? 1 : 0) - combatLevel) * Math.min(1, dt * 0.5);
         // waves wash by every few seconds — bigger surf near land and in rough weather
         waveT -= dt;
@@ -13238,7 +13330,7 @@ var qrcode = function() {
         const send = audioCtx.createGain(); send.gain.value = 0.5; gn.connect(send); send.connect(SFX.verbIn);
       }
 
-      return { start, update, thunder, duck(sec) { duckUntil = Math.max(duckUntil, performance.now() + sec * 1000); } };
+      return { start, update, thunder, duck(sec) { const d = sec || 2.4; duckUntil = Math.max(duckUntil, performance.now() + d * 1000); bgmDuck(d); } };
     })();
 
 
@@ -13388,6 +13480,7 @@ var qrcode = function() {
       perfMonitor(dt);
 
       oceanMat.uniforms.uTime.value = curTime;
+      if (Terrain.uniforms) Terrain.uniforms.uTerrainTime.value = curTime;
       // Keep the 800 m ocean centred under the camera (snapped to its 5 m grid) — no visible edge of the sea
       oceanMesh.position.set(Math.round(camTarget.x / 5) * 5, 0, Math.round(camTarget.z / 5) * 5);
 
