@@ -3508,7 +3508,7 @@ var qrcode = function() {
         { name: 'Lantern Isle', type: 'rocky', shelf: 0.5, lobes: [{ x: 150, z: -475, rx: 13, rz: 11, h: 11 }] },
         { name: "Widow's Peak", type: 'rocky', shelf: 0.5, lobes: [{ x: -565, z: -205, rx: 16, rz: 15, h: 26 }, { x: -548, z: -180, rx: 10, rz: 9, h: 10 }] },
         { name: 'Barracuda Bank', type: 'shoal', top: -1.5, shelf: 0.9, lobes: [{ x: -600, z: 300, rx: 20, rz: 9, h: 1 }] },
-        { name: 'Golden Strand', type: 'cay', shelf: 0.9, crest: true, lobes: [{ x: 420, z: 160, rx: 26, rz: 6, h: 1.4 }, { x: 446, z: 150, rx: 10, rz: 7, h: 1.6 }] },
+        { name: 'Golden Strand', type: 'cay', shelf: 0.9, crest: true, lobes: [{ x: 405, z: 185, rx: 26, rz: 6, h: 1.4 }, { x: 431, z: 175, rx: 10, rz: 7, h: 1.6 }] },
         { name: 'Mangrove Hollow', type: 'jungle', shelf: 0.75, lobes: [{ x: -240, z: -520, rx: 22, rz: 16, h: 6 }, { x: -212, z: -540, rx: 12, rz: 10, h: 5 }] },
         { name: 'Thunder Bluff', type: 'rocky', shelf: 0.5, lobes: [{ x: -560, z: -525, rx: 26, rz: 20, h: 18 }, { x: -530, z: -548, rx: 14, rz: 12, h: 12 }] },
         { name: 'Saint Elmo Reef', type: 'shoal', top: -1.0, shelf: 0.8, lobes: [{ x: 330, z: -60, rx: 14, rz: 10, h: 1 }] },
@@ -3546,22 +3546,23 @@ var qrcode = function() {
         { x: 600, z: -590, rx: 7, rz: 9, blend: 4, d: -3.0 }     // Hidden Cove's anchorage
       ];
 
-      // Scale up islands (~1.4x) and expand shelf width for gradual sandy beach tapers
+      // Scale up islands (~1.65x) to create massive, majestic islands with large beaches and grass mass
       ISLANDS.forEach(I => {
         let cx = 0, cz = 0;
         I.lobes.forEach(l => { cx += l.x; cz += l.z; });
         cx /= I.lobes.length; cz /= I.lobes.length;
         I.lobes.forEach(l => {
-          l.x = cx + (l.x - cx) * 1.30;
-          l.z = cz + (l.z - cz) * 1.30;
-          l.rx *= 1.40;
-          l.rz *= 1.40;
+          l.x = cx + (l.x - cx) * 1.15;
+          l.z = cz + (l.z - cz) * 1.15;
+          l.rx *= 1.65;
+          l.rz *= 1.65;
+          l.h = Math.max(l.h * 1.15, l.h + 0.6); // elevate the central grass mass
         });
-        I.shelf = (I.shelf || 0.6) * 1.45;
+        I.shelf = (I.shelf || 0.6) * 1.5;
         let r = 0;
         I.lobes.forEach(l => {
           const maxR = Math.max(l.rx, l.rz);
-          const shelfReach = Math.max(I.shelf * maxR, 12) * 3.2 + 25;
+          const shelfReach = Math.max(I.shelf * maxR, 14) * 3.4 + 28;
           r = Math.max(r, Math.hypot(l.x - cx, l.z - cz) + maxR + shelfReach);
         });
         I.cx = cx; I.cz = cz; I.br = r;
@@ -3580,8 +3581,8 @@ var qrcode = function() {
         for (const L of I.lobes) {
           const R = (L.rx + L.rz) * 0.5;
           const t0 = Math.hypot((x - L.x) / L.rx, (z - L.z) / L.rz);
-          const shelfW = Math.max(I.shelf * R, 12);
-          if ((t0 - 1) * R < shelfW * 3.2 + 20) { near = true; break; }
+          const shelfW = Math.max(I.shelf * R, 14);
+          if ((t0 - 1) * R < shelfW * 3.4 + 24) { near = true; break; }
         }
         if (!near) return -1e9;
         const warp = 1 + 0.16 * fbm(x * 0.05, z * 0.05, 2) + 0.06 * noise(x * 0.18, z * 0.18);
@@ -3607,20 +3608,20 @@ var qrcode = function() {
               }
               h = Math.max(h, 0.35 + 0.9 * smooth(1.0, 0.86, t)) + 0.2 * noise(x * 0.3, z * 0.3);
             } else {
-              // Asymmetrical coast: sandy beach on sheltered sides, sharp cliff rocks on exposed sides
-              const base = I.type === 'rocky' ? 6.2 : 5.0;
+              // Asymmetrical coast: large expansive sandy beach on sheltered sides, sharp cliff rocks on exposed sides
+              const base = I.type === 'rocky' ? 6.5 : 5.4;
               // Sharp rock cliff: steep precipitous drop right into the sea
               const cliffProfile = -0.4 + (base + 0.4) * smooth(1.0, 0.88, t)
                 + terrace(Math.max(0, L.h - base) * Math.pow(smooth(0.85, 0.15, t), 1.1) * hills, I.type === 'rocky' ? 2.2 : 2.6);
-              // Sandy beach: gentle, gradual slope rising slowly from the waterline into the interior
-              const beachProfile = 0.05 + smooth(1.0, 0.55, t) * 1.5 + Math.max(0, L.h - 1.5) * Math.pow(core, 1.4) * hills * 0.65;
+              // Large sandy beach: gentle, gradual slope rising slowly from the waterline into the central grass plateau
+              const beachProfile = 0.05 + smooth(1.0, 0.45, t) * 2.2 + Math.max(0, L.h - 1.8) * Math.pow(core, 1.4) * hills * 0.7;
               const cove = I.type === 'rocky' ? 0.0 : smooth(0.35, 0.65, noise(x * 0.035 + 7, z * 0.035 - 3));
               h = cliffProfile + (beachProfile - cliffProfile) * cove;
             }
           } else {
             // Gradual sandy shelf tapering smoothly into deeper sea
             const R = (L.rx + L.rz) * 0.5;
-            const shelfW = Math.max(I.shelf * R, 14);
+            const shelfW = Math.max(I.shelf * R, 15);
             const s = (t - 1) * R / shelfW;
             h = -0.15 - 1.6 * smooth(0.0, 0.65, s) - 4.5 * smooth(0.65, 1.5, s) - 17.5 * smooth(1.5, 3.2, s);
             if (I.crest) h += 2.2 * Math.exp(-Math.pow((s - 0.75) / 0.15, 2)) * smooth(-0.35, 0.05, noise(x * 0.10 + 4, z * 0.10));
@@ -3680,7 +3681,7 @@ var qrcode = function() {
       ISLANDS.forEach(I => mark(I.cx - I.br, I.cz - I.br, I.cx + I.br, I.cz + I.br, (k, tx, tz) => {
         const cx = MIN_X + (tx + 0.5) * TILE, cz = MIN_Z + (tz + 0.5) * TILE;
         const hit = I.lobes.some(L => {
-          const R = (L.rx + L.rz) * 0.5, reach = Math.max(I.shelf * R, 12) * 3.2 + 25;
+          const R = (L.rx + L.rz) * 0.5, reach = Math.max(I.shelf * R, 14) * 3.4 + 28;
           const dt = Math.hypot((cx - L.x) / L.rx, (cz - L.z) / L.rz);
           return (dt - 1) * Math.min(L.rx, L.rz) - TILE * 0.75 < reach;
         });
@@ -4812,11 +4813,17 @@ var qrcode = function() {
         waterColor = mix(waterColor, colDeep, depthT2);
 
         // Realistic Voronoi caustic shimmer in shallow Caribbean water volume
+        // Strictly 40% of the light from the sky: soft turquoise shimmer by day,
+        // and faint deep dark blue reflection at night
         if (waterDepth < 5.0) {
           float shallowFade = smoothstep(0.05, 0.25, waterDepth) * (1.0 - smoothstep(2.5, 5.0, waterDepth));
           float sCaustic = getOceanUnderwaterCaustic(vWorldPos.xz, uTime);
-          vec3 sCol = mix(vec3(0.48, 0.94, 1.0), vec3(1.0, 1.0, 1.0), clamp(sCaustic * 0.65, 0.0, 1.0));
-          waterColor += sCol * (sCaustic * shallowFade * 0.12 * uDayFactor);
+          float skyLight = mix(0.035, 1.0, uDayFactor);
+          float patternLight = 0.40 * skyLight;
+          vec3 nightShimmer = vec3(0.04, 0.12, 0.28);
+          vec3 dayShimmer = mix(vec3(0.48, 0.94, 1.0), vec3(1.0, 1.0, 1.0), clamp(sCaustic * 0.65, 0.0, 1.0));
+          vec3 sCol = mix(nightShimmer, dayShimmer, uDayFactor);
+          waterColor += sCol * (sCaustic * shallowFade * (0.20 * patternLight));
         }
 
         // Subtle soft cloud shadows
@@ -5239,12 +5246,12 @@ var qrcode = function() {
         } else if (slope > 0.75 && type !== 'cay') {
           // Sharp rock cliff faces on the steep sides of the islands
           c.copy(rock).lerp(rockWarm, Terrain.smooth(0.0, 0.6, n) * 0.8).lerp(rockDark, Terrain.smooth(1.2, -0.4, h) * 0.5);
-        } else if (h < 1.45 || type === 'cay') {
-          // Sandy beaches: warm golden-yellow sand
-          c.copy(I && I.black ? blackSand : (h < 0.25 ? sandWet : sandDry));
-          if (type === 'cay' && h > 1.05) c.lerp(grass, Terrain.smooth(1.05, 1.4, h) * 0.7);
+        } else if (h < 2.5 || type === 'cay') {
+          // Large expansive sandy beaches: warm golden-yellow Caribbean sand
+          c.copy(I && I.black ? blackSand : (h < 0.35 ? sandWet : sandDry));
+          if (type === 'cay' && h > 1.25) c.lerp(grass, Terrain.smooth(1.25, 1.6, h) * 0.7);
         } else {
-          // In the center of the islands: lush green grass and trees
+          // In the center of the islands: lush green grass mass and trees
           c.copy(grass).lerp(grassLight, Terrain.smooth(-0.1, 0.7, n2) * 0.55).lerp(grassDark, Terrain.smooth(0.35, 0.9, n) * 0.35);
           if (type === 'rocky') c.lerp(rock, 0.45);
         }
@@ -5355,9 +5362,15 @@ var qrcode = function() {
              if (depthFade > 0.002) {
                float cVal = getUnderwaterCaustic(vTerrainWorldPos.xz, uTerrainTime);
                float daylight = clamp(uTerrainDayFactor, 0.0, 1.0);
-               // Soft white filaments with delicate cyan dispersion over the golden-yellow sand
-               vec3 cCol = mix(vec3(0.48, 0.94, 1.0), vec3(1.0, 1.0, 1.0), clamp(cVal * 0.5, 0.0, 1.0));
-               outgoingLight += cCol * (cVal * depthFade * (0.32 + 0.45 * daylight));
+               // Caustics strictly 40% of the light from the sky:
+               // By day: warm sunlit white/cyan (40% of daytime sky).
+               // At night: deep dark blue sky reflection, just barely visible on the dark bottom.
+               float skyLight = mix(0.035, 1.0, daylight);
+               float patternLight = 0.40 * skyLight;
+               vec3 nightReflection = vec3(0.04, 0.12, 0.28);
+               vec3 dayReflection = mix(vec3(0.48, 0.94, 1.0), vec3(1.0, 1.0, 1.0), clamp(cVal * 0.5, 0.0, 1.0));
+               vec3 cCol = mix(nightReflection, dayReflection, daylight);
+               outgoingLight += cCol * (cVal * depthFade * patternLight);
              }
            }
            gl_FragColor = vec4( outgoingLight, diffuseColor.a );`
