@@ -7403,7 +7403,8 @@ var qrcode = function() {
           if (!grp.parent || !grp.visible) continue;
           if (m.hidden) continue;
           // Hide player captain from flagship helm when disembarked in dinghy or on foot
-          if (m.isCaptain && m.grp === player.mesh && typeof IslandExploration !== 'undefined' && IslandExploration.mode !== 'ship') {
+          const lead = (typeof captains !== 'undefined' && captains[0]) ? captains[0] : (typeof player !== 'undefined' ? player : null);
+          if (m.isCaptain && lead && m.grp === lead.mesh && typeof IslandExploration !== 'undefined' && IslandExploration.mode !== 'ship') {
             continue;
           }
           const gp = grp.position;
@@ -9671,105 +9672,134 @@ var qrcode = function() {
       // 7. DISEMBARKATION & BOARDING FLOWS
       // -------------------------------------------------------------
       function disembarkToDinghy() {
-        if (mode !== 'ship') return;
-        const mainShip = player;
-        mainShip.isAnchored = true;
-        mainShip.speed = 0;
-        mainShip.targetSpeed = 0;
-        mainShip.sailState = 0;
+        try {
+          if (mode !== 'ship') return;
+          const mainShip = (typeof captains !== 'undefined' && captains[0]) ? captains[0] : (typeof player !== 'undefined' ? player : null);
+          if (!mainShip) return;
+          mainShip.isAnchored = true;
+          mainShip.speed = 0;
+          mainShip.targetSpeed = 0;
+          mainShip.sailState = 0;
 
-        // Launch dinghy to starboard beam of main ship, or port if starboard is shallow
-        let sideDir = mainShip.heading + Math.PI / 2;
-        const dist = mainShip.tierConfig.scale * 3.2 + 2.2;
-        let dx = mainShip.position.x + Math.sin(sideDir) * dist;
-        let dz = mainShip.position.z - Math.cos(sideDir) * dist;
-        if (Terrain.height(dx, dz) > -0.25) {
-          sideDir = mainShip.heading - Math.PI / 2;
-          dx = mainShip.position.x + Math.sin(sideDir) * dist;
-          dz = mainShip.position.z - Math.cos(sideDir) * dist;
+          // Launch dinghy to starboard beam of main ship, or port if starboard is shallow
+          const shipHeading = mainShip.heading || 0;
+          let sideDir = shipHeading + Math.PI / 2;
+          const dist = (mainShip.tierConfig ? mainShip.tierConfig.scale : 1) * 3.2 + 2.2;
+          let dx = mainShip.position.x + Math.sin(sideDir) * dist;
+          let dz = mainShip.position.z - Math.cos(sideDir) * dist;
+          if (typeof Terrain !== 'undefined' && Terrain.height && Terrain.height(dx, dz) > -0.25) {
+            sideDir = shipHeading - Math.PI / 2;
+            dx = mainShip.position.x + Math.sin(sideDir) * dist;
+            dz = mainShip.position.z - Math.cos(sideDir) * dist;
+          }
+
+          const waterH = (typeof getGerstnerWaterHeight === 'function') ? getGerstnerWaterHeight(dx, dz, 0) : 0;
+          dinghyState.position.set(dx, 0.08 + waterH, dz);
+          dinghyState.heading = shipHeading;
+          dinghyState.speed = 0;
+          dinghyState.targetSpeed = 0;
+          if (dinghyMesh) {
+            dinghyMesh.position.copy(dinghyState.position);
+            dinghyMesh.rotation.y = -dinghyState.heading;
+            dinghyMesh.visible = true;
+          }
+
+          if (dinghyState.rowerMember) dinghyState.rowerMember.hidden = false;
+          if (pirateChar) pirateChar.visible = false;
+          mode = 'dinghy';
+
+          playSound('splash');
+          playSound('bosun_pipe');
+          showBanner("🛶 Disembarked on dinghy! Row for shore or board another vessel [Z].");
+          updateUI();
+        } catch (err) {
+          console.error("Disembarkation error:", err);
         }
-
-        const waterH = getGerstnerWaterHeight(dx, dz, 0);
-        dinghyState.position.set(dx, 0.08 + waterH, dz);
-        dinghyState.heading = mainShip.heading;
-        dinghyState.speed = 0;
-        dinghyState.targetSpeed = 0;
-        dinghyMesh.position.copy(dinghyState.position);
-        dinghyMesh.rotation.y = -dinghyState.heading;
-        dinghyMesh.visible = true;
-
-        if (dinghyState.rowerMember) dinghyState.rowerMember.hidden = false;
-        if (pirateChar) pirateChar.visible = false;
-        mode = 'dinghy';
-
-        playSound('splash');
-        playSound('bosun_pipe');
-        showBanner("🛶 Disembarked on dinghy! Row for shore or board another vessel [Z].");
-        updateUI();
       }
 
       function stepAshore() {
-        if (mode !== 'dinghy') return;
-        // Step out onto dry sand ahead of the dinghy
-        const beachX = dinghyState.position.x + Math.sin(dinghyState.heading) * 2.2;
-        const beachZ = dinghyState.position.z - Math.cos(dinghyState.heading) * 2.2;
-        const beachY = Math.max(0.1, Terrain.height(beachX, beachZ));
+        try {
+          if (mode !== 'dinghy') return;
+          // Step out onto dry sand ahead of the dinghy
+          const beachX = dinghyState.position.x + Math.sin(dinghyState.heading) * 2.2;
+          const beachZ = dinghyState.position.z - Math.cos(dinghyState.heading) * 2.2;
+          const beachY = Math.max(0.1, Terrain.height(beachX, beachZ));
 
-        pirateState.position.set(beachX, beachY, beachZ);
-        pirateState.heading = dinghyState.heading;
-        pirateState.speed = 0;
-        pirateChar.position.copy(pirateState.position);
-        pirateChar.rotation.y = -pirateState.heading + Math.PI;
-        pirateChar.visible = true;
+          pirateState.position.set(beachX, beachY, beachZ);
+          pirateState.heading = dinghyState.heading;
+          pirateState.speed = 0;
+          if (pirateChar) {
+            pirateChar.position.copy(pirateState.position);
+            pirateChar.rotation.y = -pirateState.heading + Math.PI;
+            pirateChar.visible = true;
+          }
 
-        // Dinghy remains beached at water's edge, rower leaves the boat
-        dinghyState.speed = 0;
-        dinghyState.targetSpeed = 0;
-        if (dinghyState.rowerMember) dinghyState.rowerMember.hidden = true;
+          // Dinghy remains beached at water's edge, rower leaves the boat
+          dinghyState.speed = 0;
+          dinghyState.targetSpeed = 0;
+          if (dinghyState.rowerMember) dinghyState.rowerMember.hidden = true;
 
-        mode = 'onfoot';
-        playSound('splash');
-        playSound('bell');
-        showBanner("🏝️ Ashore! Explore the island, hunt wild game, or harvest coconuts [Z to board].");
-        updateUI();
+          mode = 'onfoot';
+          playSound('splash');
+          playSound('bell');
+          showBanner("🏝️ Ashore! Explore the island, hunt wild game, or harvest coconuts [Z to board].");
+          updateUI();
+        } catch (err) {
+          console.error("Step ashore error:", err);
+        }
       }
 
       function boardDinghyFromShore() {
-        if (mode !== 'onfoot') return;
-        pirateChar.visible = false;
-        if (dinghyState.rowerMember) dinghyState.rowerMember.hidden = false;
-        mode = 'dinghy';
-        playSound('splash');
-        showBanner("🛶 Aboard the dinghy! Row with [W/A/S/D], press [Z] to land or board.");
-        updateUI();
+        try {
+          if (mode !== 'onfoot') return;
+          if (pirateChar) pirateChar.visible = false;
+          if (dinghyState.rowerMember) dinghyState.rowerMember.hidden = false;
+          mode = 'dinghy';
+          playSound('splash');
+          showBanner("🛶 Aboard the dinghy! Row with [W/A/S/D], press [Z] to land or board.");
+          updateUI();
+        } catch (err) {
+          console.error("Board dinghy error:", err);
+        }
       }
 
       function boardShip(targetShip) {
-        if (mode !== 'dinghy' && mode !== 'onfoot') return;
-        if (targetShip === player) {
-          // Returning to own flagship
-          dinghyMesh.visible = false;
-          if (dinghyState.rowerMember) dinghyState.rowerMember.hidden = true;
-          if (pirateChar) pirateChar.visible = false;
-          mode = 'ship';
-          playSound('bell');
-          showBanner("⚓ Welcome back aboard your flagship, Captain!");
-          updateUI();
-        } else {
-          // Boarding another vessel
-          playSound('clash');
-          showBanner(`⚔️ Boarded the ${targetShip.name || 'vessel'}! Plunder her!`);
+        try {
+          if (mode !== 'dinghy' && mode !== 'onfoot') return;
+          const mainShip = (typeof captains !== 'undefined' && captains[0]) ? captains[0] : (typeof player !== 'undefined' ? player : null);
+          if (targetShip === mainShip || (typeof player !== 'undefined' && targetShip === player)) {
+            // Returning to own flagship
+            if (dinghyMesh) dinghyMesh.visible = false;
+            if (dinghyState.rowerMember) dinghyState.rowerMember.hidden = true;
+            if (pirateChar) pirateChar.visible = false;
+            mode = 'ship';
+            playSound('bell');
+            showBanner("⚓ Welcome back aboard your flagship, Captain!");
+            updateUI();
+          } else {
+            // Boarding another vessel
+            playSound('clash');
+            showBanner(`⚔️ Boarded the ${targetShip.name || 'vessel'}! Plunder her!`);
+          }
+        } catch (err) {
+          console.error("Board ship error:", err);
         }
       }
 
       function handleDisembarkBtn() {
         if (mode === 'ship') disembarkToDinghy();
         else if (mode === 'dinghy') {
+          const curH = Terrain.height(dinghyState.position.x, dinghyState.position.z);
           if (nearbyTarget && nearbyTarget.type === 'beach') stepAshore();
           else if (nearbyTarget && nearbyTarget.type === 'ship') boardShip(nearbyTarget.obj);
+          else if (curH > -0.65) stepAshore();
         } else if (mode === 'onfoot') {
           if (nearbyTarget && nearbyTarget.type === 'dinghy') boardDinghyFromShore();
           else if (nearbyTarget && nearbyTarget.type === 'ship') boardShip(nearbyTarget.obj);
+          else {
+            const dist = pirateState.position.distanceTo(dinghyState.position);
+            if (dist < 6.0) boardDinghyFromShore();
+          }
         }
       }
 
@@ -9901,6 +9931,7 @@ var qrcode = function() {
       // 9. SIMULATION UPDATE LOOPS
       // -------------------------------------------------------------
       function update(dt, curTime) {
+        try {
         if (attackTimer > 0) {
           attackTimer = Math.max(0, attackTimer - dt);
           if (attackTimer === 0 && pirateState.armRight) {
@@ -9910,7 +9941,7 @@ var qrcode = function() {
 
         // 1. Dinghy Mode Motion
         if (mode === 'dinghy') {
-          const held = Input.held || {};
+          const held = (typeof Input !== 'undefined' && Input.held) ? Input.held : {};
           let steer = 0, row = 0;
           if (held.left) steer -= 1;
           if (held.right) steer += 1;
@@ -9941,14 +9972,16 @@ var qrcode = function() {
           }
 
           // Dinghy stays strictly on the ocean water surface — NEVER floats or drives onto land:
-          const waterH = getGerstnerWaterHeight(dinghyState.position.x, dinghyState.position.z, curTime);
+          const waterH = (typeof getGerstnerWaterHeight === 'function') ? getGerstnerWaterHeight(dinghyState.position.x, dinghyState.position.z, curTime) : 0;
           dinghyState.position.y = 0.08 + waterH;
 
-          dinghyMesh.position.copy(dinghyState.position);
-          dinghyMesh.rotation.y = -dinghyState.heading;
+          if (dinghyMesh) {
+            dinghyMesh.position.copy(dinghyState.position);
+            dinghyMesh.rotation.y = -dinghyState.heading;
+          }
 
           // Animate oars and rower in the authentic dinghy
-          if (Math.abs(dinghyState.speed) > 0.05) {
+          if (Math.abs(dinghyState.speed) > 0.05 && dinghyMesh) {
             dinghyState.oarPhase = (dinghyState.oarPhase || 0) + dt * 4.5 * Math.sign(dinghyState.speed);
             dinghyMesh.userData.rowPhase = dinghyState.oarPhase;
             if (dinghyMesh.userData.oars) {
@@ -9962,15 +9995,17 @@ var qrcode = function() {
 
           // Check proximity to beach or ships for prompt
           nearbyTarget = null;
-          if (groundH > -0.65) {
+          if (curH > -0.65) {
             nearbyTarget = { type: 'beach', text: 'Step Ashore' };
           } else {
-            const distToMain = dinghyState.position.distanceTo(player.position);
-            if (distToMain < 8.0) {
-              nearbyTarget = { type: 'ship', obj: player, text: 'Board Flagship' };
+            const mainShip = (typeof captains !== 'undefined' && captains[0]) ? captains[0] : (typeof player !== 'undefined' ? player : null);
+            const distToMain = mainShip ? dinghyState.position.distanceTo(mainShip.position) : 999;
+            if (distToMain < 8.0 && mainShip) {
+              nearbyTarget = { type: 'ship', obj: mainShip, text: 'Board Flagship' };
             } else {
-              for (const e of enemies) {
-                if (e.hp > 0 && dinghyState.position.distanceTo(e.position) < 8.0) {
+              const enemyList = (typeof enemies !== 'undefined' ? enemies : []);
+              for (const e of enemyList) {
+                if (e && e.hp > 0 && dinghyState.position.distanceTo(e.position) < 8.0) {
                   nearbyTarget = { type: 'ship', obj: e, text: `Board ${e.name || 'Ship'}` };
                   break;
                 }
@@ -9981,7 +10016,7 @@ var qrcode = function() {
 
         // 2. On-Foot Mode Motion
         else if (mode === 'onfoot') {
-          const held = Input.held || {};
+          const held = (typeof Input !== 'undefined' && Input.held) ? Input.held : {};
           let mx = 0, mz = 0;
           if (held.left) mx -= 1;
           if (held.right) mx += 1;
@@ -10018,8 +10053,10 @@ var qrcode = function() {
           }
 
           pirateState.position.y = Math.max(0, Terrain.height(pirateState.position.x, pirateState.position.z));
-          pirateChar.position.copy(pirateState.position);
-          pirateChar.rotation.y = -pirateState.heading + Math.PI;
+          if (pirateChar) {
+            pirateChar.position.copy(pirateState.position);
+            pirateChar.rotation.y = -pirateState.heading + Math.PI;
+          }
 
           // Check proximity to dinghy or nearby ship
           nearbyTarget = null;
@@ -10027,9 +10064,10 @@ var qrcode = function() {
           if (distToDinghy < 5.0) {
             nearbyTarget = { type: 'dinghy', text: 'Board Dinghy' };
           } else {
-            const distToMain = pirateState.position.distanceTo(player.position);
-            if (distToMain < 8.0) {
-              nearbyTarget = { type: 'ship', obj: player, text: 'Board Ship' };
+            const mainShip = (typeof captains !== 'undefined' && captains[0]) ? captains[0] : (typeof player !== 'undefined' ? player : null);
+            const distToMain = mainShip ? pirateState.position.distanceTo(mainShip.position) : 999;
+            if (distToMain < 8.0 && mainShip) {
+              nearbyTarget = { type: 'ship', obj: mainShip, text: 'Board Ship' };
             }
           }
         }
@@ -10122,6 +10160,9 @@ var qrcode = function() {
         }
 
         updateUI();
+        } catch (err) {
+          console.error("IslandExploration update error:", err);
+        }
       }
 
       function updateUI() {
