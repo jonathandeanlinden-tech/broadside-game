@@ -4803,14 +4803,11 @@ var qrcode = function() {
         // Pure tropical water body color: clear aqua tint in shallows,
         // so the radiant golden coral sand at the bottom shines through
         // and physically gives the shallow water its world-famous turquoise color!
-        // Pure tropical water body tint: crystal-clear Caribbean turquoise
-        // The darker blues and multi-depth gradients are physically placed on the seabed beneath the water,
-        // eliminating any "floating spill" look on the surface plane!
-        vec3 colShallow = mix(vec3(0.012, 0.06, 0.12), vec3(0.05, 0.62, 0.76), uDayFactor);
-        vec3 colDeep    = mix(vec3(0.005, 0.02, 0.06), vec3(0.02, 0.14, 0.30), uDayFactor);
-        // Wide, seamless 25m water volume depth blend matching natural ocean light absorption
-        float depthFactor = smoothstep(2.0, 25.0, waterDepth);
-        vec3 waterColor = mix(colShallow, colDeep, depthFactor);
+        // Pure transparent Caribbean water: crystal-clear tropical turquoise tint across the surface.
+        // There is NO dark blue dye on the surface mesh!
+        // The deep parts of the ocean have their dark blue colour at the bottom on the seabed,
+        // so looking into the water looks directly into the depth.
+        vec3 waterColor = mix(vec3(0.012, 0.06, 0.12), vec3(0.06, 0.68, 0.78), uDayFactor);
 
         // Realistic Voronoi caustic shimmer in shallow Caribbean water volume
         // Strictly 40% of the light from the sky: soft turquoise shimmer by day,
@@ -4888,12 +4885,12 @@ var qrcode = function() {
           waterColor = mix(waterColor, vec3(0.86, 0.93, 1.0) * (0.45 + 0.55 * uDayFactor), clamp(rings, 0.0, 1.0) * 0.5 * uRain);
         }
 
-        // Luminous Caribbean shallow water with soft optical turquoise body
-        // Opacity in shallows (0.20 to 0.40) softly veils the bottom,
-        // while the warm yellow sand and caustics glow through with semi-transparency
-        float opticalAlpha = 0.20 + 0.68 * (1.0 - exp(-waterDepth * 0.08));
-        // Glancing view toward horizon reflects sky and becomes opaque
-        float waterAlpha = mix(clamp(opticalAlpha, 0.20, 0.94), 0.98, fresnel * 0.65);
+        // Truly transparent Caribbean water: looking down looks straight INTO THE DEPTH!
+        // At the bottom of the depth, the seabed carries the physical colors (golden sand, turquoise reef, azure shelf, dark blue abyss floor).
+        // Surface opacity when looking straight down is low (0.08 to 0.18) so the water looks clear, not dyed.
+        float opticalAlpha = 0.08 + 0.10 * (1.0 - exp(-waterDepth * 0.06));
+        // Glancing view toward horizon reflects sky and becomes opaque via Fresnel
+        float waterAlpha = mix(clamp(opticalAlpha, 0.08, 0.94), 0.98, fresnel * 0.75);
         // Shoreline surf and foam are opaque white
         waterAlpha = max(waterAlpha, foamAmt * 0.94);
 
@@ -5189,10 +5186,10 @@ var qrcode = function() {
       sand: [1.08, 0.86, 0.42], // rich golden-yellow Caribbean sand
       sandWet: [0.88, 0.70, 0.34], // warm moist yellow sand
       reefSand: [1.02, 0.85, 0.42], // vibrant sunlit yellow shallow reef sand
-      reefCoral: [0.18, 0.62, 0.68], // vibrant tropical Caribbean lagoon turquoise
-      shelfSlope: [0.07, 0.30, 0.52], // coastal azure ocean shelf
+      reefCoral: [0.18, 0.65, 0.70], // vibrant tropical Caribbean lagoon turquoise
+      shelfSlope: [0.06, 0.32, 0.54], // coastal azure ocean shelf
       cliff: [0.14, 0.14, 0.18], cliffWarm: [0.26, 0.18, 0.17], cliffDark: [0.09, 0.09, 0.11],
-      deep: [0.04, 0.16, 0.32], abyssFloor: [0.02, 0.08, 0.20], seagrass: [0.18, 0.38, 0.22]
+      deep: [0.03, 0.18, 0.38], abyssFloor: [0.015, 0.10, 0.26], seagrass: [0.18, 0.38, 0.22]
     };
     // 0 on a winding dirt path, rising to 1 away from it (shared by terrain colour + vegetation placement)
     const pathField = (x, z) => Math.abs(Terrain.noise(x * 0.05 + 3, z * 0.05 - 8) + 0.125 * Terrain.noise(x * 0.11, z * 0.11 + 4));
