@@ -182,6 +182,53 @@
     .board-btn { color: #fecaca; border-color: rgba(239, 68, 68, 0.8); animation: hull-pulse 1s infinite; }
     .ammo-btn { flex: 0.7 !important; color: var(--brass); }
 
+    .disembark-chip {
+      position: absolute; bottom: calc(4.5vh + var(--u) * 19); left: 50%; transform: translateX(-50%);
+      padding: calc(var(--u) * 1.1) calc(var(--u) * 2.6); border-radius: 999px; font-weight: 800; font-size: 1.05em;
+      color: #fde68a; border-color: rgba(242, 181, 68, 0.6); background: rgba(7, 20, 36, 0.92);
+      cursor: pointer; transition: transform .15s, background .15s, border-color .15s; z-index: 30;
+      display: flex; align-items: center; gap: .6em; box-shadow: 0 0.8vh 2.4vh rgba(0,0,0,0.5);
+    }
+    .disembark-chip:hover { transform: translateX(-50%) scale(1.04); border-color: var(--brass); background: rgba(14, 34, 58, 0.98); }
+
+    .pirate-bar {
+      position: absolute; bottom: 4vh; left: 50%; transform: translateX(-50%);
+      display: flex; align-items: center; gap: calc(var(--u) * 2.2); padding: calc(var(--u) * 1.4) calc(var(--u) * 2.6);
+      background: linear-gradient(180deg, rgba(14, 34, 58, 0.96), rgba(7, 19, 34, 0.98));
+      border: 0.22vh solid rgba(242, 181, 68, 0.6); border-radius: calc(var(--u) * 2);
+      box-shadow: 0 1.5vh 4vh rgba(0,0,0,0.65); z-index: 30; min-width: calc(var(--u) * 62);
+    }
+    .pirate-info { display: flex; flex-direction: column; gap: calc(var(--u) * 0.4); }
+    .pirate-title { font-family: var(--display); font-size: calc(var(--u) * 2.4); color: var(--brass); font-weight: 400; line-height: 1; }
+    .pirate-provisions { display: flex; gap: calc(var(--u) * 1.0); font-size: 0.85em; font-weight: 800; }
+    .prov-pill { background: rgba(255,255,255,0.07); padding: 0.25em 0.7em; border-radius: 999px; border: 0.15vh solid rgba(255,255,255,0.12); color: #fde68a; }
+
+    .weapon-slots { display: flex; gap: calc(var(--u) * 1.1); }
+    .wep-slot {
+      position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      width: calc(var(--u) * 9.2); height: calc(var(--u) * 8.6); border-radius: calc(var(--u) * 1.4);
+      background: rgba(255, 255, 255, 0.05); border: 0.2vh solid rgba(255, 255, 255, 0.14);
+      color: var(--ink); cursor: pointer; transition: transform .12s, border-color .15s, background .15s;
+    }
+    .wep-slot:hover { border-color: rgba(242, 181, 68, 0.7); transform: translateY(-0.3vh); }
+    .wep-slot.active {
+      border-color: var(--brass); background: rgba(242, 181, 68, 0.20);
+      box-shadow: 0 0 1.6vh rgba(242, 181, 68, 0.45); transform: translateY(-0.4vh);
+    }
+    .wep-key { position: absolute; top: 0.3vh; left: 0.5vh; font-size: 0.68em; font-weight: 900; color: var(--brass); }
+    .wep-icon { font-size: calc(var(--u) * 3.2); line-height: 1; }
+    .wep-name { font-size: 0.68em; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.2em; color: var(--ink); }
+
+    .pirate-actions { display: flex; flex-direction: column; gap: calc(var(--u) * 0.7); }
+    .action-btn {
+      display: flex; align-items: center; gap: 0.5em; padding: calc(var(--u) * 0.8) calc(var(--u) * 1.6);
+      border-radius: 999px; border: 0.18vh solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.06);
+      color: var(--ink); font-weight: 800; font-size: 0.85em; cursor: pointer; transition: transform .12s, background .12s;
+    }
+    .action-btn:hover { background: rgba(255, 255, 255, 0.15); transform: scale(1.03); }
+    .attack-btn { border-color: rgba(239, 68, 68, 0.6); color: #fecaca; }
+    .board-btn { border-color: rgba(74, 222, 128, 0.6); color: #bbf7d0; }
+
     #dock-prompt { position: absolute; bottom: calc(4.5vh + var(--u) * 19); left: 50%; transform: translateX(-50%);
       padding: calc(var(--u) * 1.2) calc(var(--u) * 3); border-radius: 999px; font-weight: 900; font-size: 1.1em; color: #bbf7d0;
       border-color: rgba(74, 222, 128, 0.7); animation: prompt-bob 1.6s ease-in-out infinite; white-space: nowrap; }
@@ -440,6 +487,47 @@ body.chart-open #hud, body.chart-open #damage-container { opacity: 0; transition
           <div class="key-hint" id="hint-stbd"></div>
         </div>
       </section>
+
+      <!-- Pirate On-Foot & Dinghy Explorer Action Bar -->
+      <section class="pirate-bar panel" id="hud-pirate-bar" style="display: none;">
+        <div class="pirate-info">
+          <div class="pirate-title">🏴‍☠️ Pirate Explorer</div>
+          <div class="pirate-provisions">
+            <span class="prov-pill" id="hud-meat-pill">🍖 <span id="hud-meat-val">0</span> Meat</span>
+            <span class="prov-pill" id="hud-coco-pill">🥥 <span id="hud-coco-val">0</span> Coconuts</span>
+          </div>
+        </div>
+        <div class="weapon-slots">
+          <button class="wep-slot active" id="slot-cutlass" onclick="IslandExploration.selectWeapon('cutlass')">
+            <span class="wep-key">1</span>
+            <span class="wep-icon">🗡️</span>
+            <span class="wep-name">Cutlass</span>
+          </button>
+          <button class="wep-slot" id="slot-spear" onclick="IslandExploration.selectWeapon('spear')">
+            <span class="wep-key">2</span>
+            <span class="wep-icon">🔱</span>
+            <span class="wep-name">Spear</span>
+          </button>
+          <button class="wep-slot" id="slot-axe" onclick="IslandExploration.selectWeapon('axe')">
+            <span class="wep-key">3</span>
+            <span class="wep-icon">🪓</span>
+            <span class="wep-name">Axe</span>
+          </button>
+        </div>
+        <div class="pirate-actions">
+          <button class="action-btn attack-btn" id="btn-attack" onclick="IslandExploration.attack()">
+            <b class="glyph">SPACE</b> ⚔️ Attack / Chop
+          </button>
+          <button class="action-btn board-btn" id="btn-interact" onclick="IslandExploration.handleInteract()">
+            <b class="glyph">E</b> <span id="interact-label">Board Dinghy</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Disembark Prompt Button for Ship Mode -->
+      <button class="disembark-chip panel" id="btn-disembark-chip" onclick="IslandExploration.handleDisembarkBtn()">
+        <b class="glyph">E</b> 🛶 <span id="disembark-label">Disembark Dinghy</span>
+      </button>
 
       <div class="pad-chip panel wait" id="pad-chip"><span class="dot"></span><span id="pad-chip-text">Phone controller: connecting…</span></div>
       <div class="pause-hint panel" id="pause-hint">Pause</div>
@@ -3008,7 +3096,7 @@ var qrcode = function() {
        ========================================================================= */
     const Input = (() => {
       let A = {};
-      const held = { left: false, right: false };
+      const held = { left: false, right: false, up: false, down: false };
       const padCounters = new Map();
       const padSeat = new Map();       // connection id -> seat token (survives phone reconnects)
       const seatRudder = new Map();    // seat -> { r, at }
@@ -3048,17 +3136,35 @@ var qrcode = function() {
           return;
         }
 
+        // Handle on-foot & dinghy explorer hotkeys
+        if (typeof IslandExploration !== 'undefined' && IslandExploration.mode !== 'ship') {
+          if (k === '1') { IslandExploration.selectWeapon('cutlass'); e.preventDefault(); return; }
+          if (k === '2') { IslandExploration.selectWeapon('spear'); e.preventDefault(); return; }
+          if (k === '3') { IslandExploration.selectWeapon('axe'); e.preventDefault(); return; }
+          if (k === 'e' || k === 'f') { IslandExploration.handleInteract(); e.preventDefault(); return; }
+          if (k === ' ') { IslandExploration.attack(); e.preventDefault(); return; }
+        } else if (typeof IslandExploration !== 'undefined' && IslandExploration.mode === 'ship') {
+          if (k === 'e') {
+            IslandExploration.handleDisembarkBtn();
+            e.preventDefault();
+            return;
+          }
+        }
+
         // Keyboard: A/D steer, ← / → (or < / >) fire port / starboard.
         // A TV remote only has arrows, so on TV browsers ← / → steer instead.
         const arrowsSteer = Settings.isTvBrowser();
         const steerL = k === 'a' || (arrowsSteer && k === 'ArrowLeft');
         const steerR = k === 'd' || (arrowsSteer && k === 'ArrowRight');
         const fireL = k === 'q' || k === ',' || k === '<' || (!arrowsSteer && k === 'ArrowLeft');
-        const fireR = k === 'e' || k === '.' || k === '>' || (!arrowsSteer && k === 'ArrowRight');
+        const fireR = k === '.' || k === '>' || (!arrowsSteer && k === 'ArrowRight');
         let handled = true;
         if (steerL) held.left = true;
         else if (steerR) held.right = true;
-        else if (e.repeat) handled = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Tab'].includes(k);
+        if (k === 'ArrowUp' || k === 'w') held.up = true;
+        if (k === 'ArrowDown' || k === 's') held.down = true;
+
+        if (e.repeat) handled = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Tab'].includes(k);
         else if (k === 'ArrowUp' || k === 'w') { if (e.shiftKey) call('burst'); else call('sailUp'); }
         else if (k === 'ArrowDown' || k === 's') call('sailDown');
         else if (fireL) call('firePort');
@@ -3079,12 +3185,20 @@ var qrcode = function() {
         const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
         if (k === 'ArrowLeft' || k === 'a') held.left = false;
         if (k === 'ArrowRight' || k === 'd') held.right = false;
+        if (k === 'ArrowUp' || k === 'w') held.up = false;
+        if (k === 'ArrowDown' || k === 's') held.down = false;
       });
       window.addEventListener('wheel', e => {
         call('zoomCam', e.deltaY);
       }, { passive: true });
-      window.addEventListener('blur', () => { held.left = held.right = false; });
-      window.addEventListener('pointerdown', () => call('anyInput'));
+      window.addEventListener('blur', () => { held.left = held.right = held.up = held.down = false; });
+      window.addEventListener('pointerdown', e => {
+        call('anyInput');
+        if (typeof IslandExploration !== 'undefined' && IslandExploration.mode === 'onfoot') {
+          if (e.target && (e.target.closest('button') || e.target.closest('.panel') || e.target.closest('#hud-pirate-bar'))) return;
+          IslandExploration.attack();
+        }
+      });
 
       /* ---------- gamepads (Xbox / PlayStation / generic "standard" mapping) ---------- */
       function pollGamepads(dt) {
@@ -3986,6 +4100,69 @@ var qrcode = function() {
         gain.connect(masterGain);
         osc.start(t);
         osc.stop(t + 0.33);
+      } else if (type === 'slash') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(820, t);
+        osc.frequency.exponentialRampToValueAtTime(160, t + 0.12);
+        gain.gain.setValueAtTime(0.25, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+        osc.connect(gain); gain.connect(masterGain);
+        osc.start(t); osc.stop(t + 0.14);
+      } else if (type === 'thrust') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(320, t);
+        osc.frequency.exponentialRampToValueAtTime(110, t + 0.15);
+        gain.gain.setValueAtTime(0.35, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+        osc.connect(gain); gain.connect(masterGain);
+        osc.start(t); osc.stop(t + 0.16);
+      } else if (type === 'chop') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(140, t);
+        osc.frequency.exponentialRampToValueAtTime(45, t + 0.16);
+        gain.gain.setValueAtTime(0.4, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+        osc.connect(gain); gain.connect(masterGain);
+        osc.start(t); osc.stop(t + 0.18);
+      } else if (type === 'oink') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(260, t);
+        osc.frequency.linearRampToValueAtTime(190, t + 0.08);
+        osc.frequency.linearRampToValueAtTime(240, t + 0.16);
+        osc.frequency.linearRampToValueAtTime(140, t + 0.28);
+        gain.gain.setValueAtTime(0.25, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+        osc.connect(gain); gain.connect(masterGain);
+        osc.start(t); osc.stop(t + 0.30);
+      } else if (type === 'monkey') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(950, t);
+        osc.frequency.linearRampToValueAtTime(1450, t + 0.08);
+        osc.frequency.linearRampToValueAtTime(800, t + 0.16);
+        gain.gain.setValueAtTime(0.2, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+        osc.connect(gain); gain.connect(masterGain);
+        osc.start(t); osc.stop(t + 0.20);
+      } else if (type === 'coconut') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(420, t);
+        osc.frequency.exponentialRampToValueAtTime(120, t + 0.14);
+        gain.gain.setValueAtTime(0.3, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+        osc.connect(gain); gain.connect(masterGain);
+        osc.start(t); osc.stop(t + 0.16);
       }
     }
 
@@ -9016,6 +9193,979 @@ var qrcode = function() {
       changeTimer: 0
     };
 
+    /* =========================================================================
+       ISLAND EXPLORATION: DINGHY, ON-FOOT PIRATE, WEAPONS & WILDLIFE
+       ========================================================================= */
+    const IslandExploration = (() => {
+      let mode = 'ship'; // 'ship' | 'dinghy' | 'onfoot'
+      let activeWeapon = 'cutlass';
+      let attackTimer = 0;
+      let meatCount = 0;
+      let cocoCount = 0;
+      let nearbyTarget = null; // { type: 'dinghy'|'beach'|'ship', obj, text }
+
+      // 3D Meshes & Groups
+      let dinghyMesh = null;
+      let pirateChar = null;
+      const weapons = {};
+
+      const dinghyState = {
+        position: new THREE.Vector3(0, 0.1, 0),
+        heading: 0,
+        speed: 0,
+        targetSpeed: 0,
+        oarPhase: 0,
+        oarL: null,
+        oarR: null,
+        rower: null
+      };
+
+      const pirateState = {
+        position: new THREE.Vector3(0, 0, 0),
+        heading: 0,
+        speed: 0,
+        walkPhase: 0,
+        armLeft: null,
+        armRight: null,
+        isMoving: false
+      };
+
+      const wildlife = [];
+      const harvestablePalms = [];
+      const droppedLoot = [];
+
+      // -------------------------------------------------------------
+      // 1. WEAPON MESH BUILDERS (Cutlass, Spear, Axe)
+      // -------------------------------------------------------------
+      function buildCutlassMesh() {
+        const g = new THREE.Group();
+        const bladeGeo = new THREE.BoxGeometry(0.04, 0.70, 0.08);
+        const bladeMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, metalness: 0.88, roughness: 0.22 });
+        const blade = new THREE.Mesh(bladeGeo, bladeMat);
+        blade.position.set(0, 0.38, 0);
+        blade.rotation.x = -0.08;
+        blade.castShadow = true;
+        g.add(blade);
+
+        const tipGeo = new THREE.ConeGeometry(0.05, 0.16, 4);
+        const tip = new THREE.Mesh(tipGeo, bladeMat);
+        tip.position.set(0, 0.76, 0.01);
+        tip.rotation.y = Math.PI / 4;
+        g.add(tip);
+
+        const guardMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.82, roughness: 0.28 });
+        const guardGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.035, 8);
+        const guard = new THREE.Mesh(guardGeo, guardMat);
+        guard.position.set(0, 0.05, 0);
+        g.add(guard);
+
+        const gripGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.16, 6);
+        const gripMat = new THREE.MeshStandardMaterial({ color: 0x3e2723, roughness: 0.85 });
+        const grip = new THREE.Mesh(gripGeo, gripMat);
+        grip.position.set(0, -0.05, 0);
+        g.add(grip);
+
+        const pommelGeo = new THREE.SphereGeometry(0.05, 6, 6);
+        const pommel = new THREE.Mesh(pommelGeo, guardMat);
+        pommel.position.set(0, -0.14, 0);
+        g.add(pommel);
+
+        g.scale.setScalar(0.9);
+        return g;
+      }
+
+      function buildSpearMesh() {
+        const g = new THREE.Group();
+        const shaftGeo = new THREE.CylinderGeometry(0.03, 0.032, 2.1, 6);
+        const shaftMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.85 });
+        const shaft = new THREE.Mesh(shaftGeo, shaftMat);
+        shaft.position.set(0, 0.65, 0);
+        shaft.castShadow = true;
+        g.add(shaft);
+
+        const headGeo = new THREE.ConeGeometry(0.09, 0.42, 4);
+        const headMat = new THREE.MeshStandardMaterial({ color: 0xe5e7eb, metalness: 0.9, roughness: 0.18 });
+        const head = new THREE.Mesh(headGeo, headMat);
+        head.position.set(0, 1.82, 0);
+        head.rotation.y = Math.PI / 4;
+        head.castShadow = true;
+        g.add(head);
+
+        const bindGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.12, 6);
+        const bindMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.9 });
+        const bind = new THREE.Mesh(bindGeo, bindMat);
+        bind.position.set(0, 1.62, 0);
+        g.add(bind);
+
+        g.scale.setScalar(0.85);
+        return g;
+      }
+
+      function buildAxeMesh() {
+        const g = new THREE.Group();
+        const haftGeo = new THREE.CylinderGeometry(0.035, 0.04, 0.85, 6);
+        const haftMat = new THREE.MeshStandardMaterial({ color: 0x854d0e, roughness: 0.85 });
+        const haft = new THREE.Mesh(haftGeo, haftMat);
+        haft.position.set(0, 0.28, 0);
+        haft.castShadow = true;
+        g.add(haft);
+
+        const headMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.82, roughness: 0.32 });
+        const bladeGeo = new THREE.BoxGeometry(0.05, 0.28, 0.22);
+        const blade = new THREE.Mesh(bladeGeo, headMat);
+        blade.position.set(0, 0.64, 0.10);
+        blade.castShadow = true;
+        g.add(blade);
+
+        const spikeGeo = new THREE.ConeGeometry(0.04, 0.15, 4);
+        const spike = new THREE.Mesh(spikeGeo, headMat);
+        spike.position.set(0, 0.64, -0.09);
+        spike.rotation.x = -Math.PI / 2;
+        g.add(spike);
+
+        g.scale.setScalar(0.9);
+        return g;
+      }
+
+      // -------------------------------------------------------------
+      // 2. DINGHY MESH BUILDER
+      // -------------------------------------------------------------
+      function buildDinghy() {
+        const g = new THREE.Group();
+        const woodMat = new THREE.MeshStandardMaterial({ color: 0x5c3818, roughness: 0.85, flatShading: true });
+        const seatMat = new THREE.MeshStandardMaterial({ color: 0x854d0e, roughness: 0.8, flatShading: true });
+        const trimMat = new THREE.MeshStandardMaterial({ color: 0x27180c, roughness: 0.9 });
+
+        // Hull
+        const hullGeo = new THREE.BoxGeometry(1.8, 0.65, 4.2);
+        const hull = new THREE.Mesh(hullGeo, woodMat);
+        hull.position.y = 0.25;
+        hull.castShadow = true;
+        hull.receiveShadow = true;
+        g.add(hull);
+
+        // Gunwales
+        const gunwaleL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 4.25), trimMat);
+        gunwaleL.position.set(-0.92, 0.58, 0);
+        const gunwaleR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 4.25), trimMat);
+        gunwaleR.position.set(0.92, 0.58, 0);
+        g.add(gunwaleL); g.add(gunwaleR);
+
+        // Bow wedge
+        const bowGeo = new THREE.ConeGeometry(0.95, 1.2, 4);
+        const bow = new THREE.Mesh(bowGeo, woodMat);
+        bow.rotation.set(-Math.PI / 2, Math.PI / 4, 0);
+        bow.position.set(0, 0.25, 2.6);
+        bow.castShadow = true;
+        g.add(bow);
+
+        // Interior thwarts (seats)
+        const seat1 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.1, 0.45), seatMat);
+        seat1.position.set(0, 0.45, 0.4);
+        const seat2 = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.1, 0.45), seatMat);
+        seat2.position.set(0, 0.45, -1.1);
+        g.add(seat1); g.add(seat2);
+
+        // Two Oars
+        const oarMat = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.8 });
+        const oarLGrp = new THREE.Group();
+        oarLGrp.position.set(-0.95, 0.58, 0.4);
+        const oarLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.8, 5), oarMat);
+        oarLMesh.position.set(-1.1, -0.4, 0);
+        oarLMesh.rotation.z = 0.65;
+        oarLGrp.add(oarLMesh);
+        g.add(oarLGrp);
+
+        const oarRGrp = new THREE.Group();
+        oarRGrp.position.set(0.95, 0.58, 0.4);
+        const oarRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.8, 5), oarMat);
+        oarRMesh.position.set(1.1, -0.4, 0);
+        oarRMesh.rotation.z = -0.65;
+        oarRGrp.add(oarRMesh);
+        g.add(oarRGrp);
+
+        // Seated pirate rower figurine in the dinghy
+        const rower = createCharacterMesh({
+          role: 'crew',
+          hasHat: true,
+          hatType: 'tricorn',
+          scale: 0.85
+        });
+        rower.position.set(0, 0.38, 0.35);
+        rower.rotation.y = Math.PI; // faces stern
+        if (rower.userData.characterData.armLeft) rower.userData.characterData.armLeft.rotation.set(-0.6, 0.3, -0.2);
+        if (rower.userData.characterData.armRight) rower.userData.characterData.armRight.rotation.set(-0.6, -0.3, 0.2);
+        g.add(rower);
+
+        dinghyState.oarL = oarLGrp;
+        dinghyState.oarR = oarRGrp;
+        dinghyState.rower = rower;
+        g.visible = false;
+        scene.add(g);
+        return g;
+      }
+
+      // -------------------------------------------------------------
+      // 3. ON-FOOT PIRATE CHARACTER BUILDER
+      // -------------------------------------------------------------
+      function buildPirate() {
+        const char = createCharacterMesh({
+          role: 'captain',
+          hasHat: true,
+          hatType: 'tricorn',
+          hatColor: 0x1f2937,
+          scale: 0.95
+        });
+        pirateState.armLeft = char.userData.characterData.armLeft;
+        pirateState.armRight = char.userData.characterData.armRight;
+
+        // Build 3 weapons and attach active one to right arm
+        weapons.cutlass = buildCutlassMesh();
+        weapons.spear = buildSpearMesh();
+        weapons.axe = buildAxeMesh();
+
+        Object.values(weapons).forEach(w => {
+          w.position.set(0.06, -0.28, 0.14);
+          w.rotation.set(0.4, 0, 0);
+          w.visible = false;
+          pirateState.armRight.add(w);
+        });
+
+        weapons[activeWeapon].visible = true;
+        char.visible = false;
+        scene.add(char);
+        return char;
+      }
+
+      // -------------------------------------------------------------
+      // 4. WILDLIFE MESH BUILDERS (Wild Pigs & Monkeys)
+      // -------------------------------------------------------------
+      function createWildPigMesh() {
+        const g = new THREE.Group();
+        const skinMat = new THREE.MeshStandardMaterial({ color: 0xdba386, roughness: 0.85, flatShading: true });
+        const snoutMat = new THREE.MeshStandardMaterial({ color: 0xeb9c9b, roughness: 0.75, flatShading: true });
+        const darkMat = new THREE.MeshStandardMaterial({ color: 0x27272a, roughness: 0.9 });
+
+        const bodyGeo = new THREE.BoxGeometry(0.85, 0.65, 1.25);
+        const body = new THREE.Mesh(bodyGeo, skinMat);
+        body.position.set(0, 0.55, 0);
+        body.castShadow = true;
+        g.add(body);
+
+        const headGeo = new THREE.BoxGeometry(0.55, 0.50, 0.55);
+        const head = new THREE.Mesh(headGeo, skinMat);
+        head.position.set(0, 0.65, 0.75);
+        head.castShadow = true;
+        g.add(head);
+
+        const snoutGeo = new THREE.BoxGeometry(0.32, 0.24, 0.22);
+        const snout = new THREE.Mesh(snoutGeo, snoutMat);
+        snout.position.set(0, 0.55, 1.05);
+        g.add(snout);
+
+        const n1 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.02), darkMat);
+        n1.position.set(-0.08, 0.55, 1.17);
+        const n2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.02), darkMat);
+        n2.position.set(0.08, 0.55, 1.17);
+        g.add(n1); g.add(n2);
+
+        const earGeo = new THREE.ConeGeometry(0.14, 0.22, 3);
+        const earL = new THREE.Mesh(earGeo, skinMat);
+        earL.position.set(-0.25, 0.92, 0.7);
+        earL.rotation.set(-0.3, 0, -0.4);
+        const earR = new THREE.Mesh(earGeo, skinMat);
+        earR.position.set(0.25, 0.92, 0.7);
+        earR.rotation.set(-0.3, 0, 0.4);
+        g.add(earL); g.add(earR);
+
+        const legGeo = new THREE.CylinderGeometry(0.09, 0.08, 0.35, 6);
+        const legFL = new THREE.Mesh(legGeo, skinMat); legFL.position.set(-0.32, 0.18, 0.45);
+        const legFR = new THREE.Mesh(legGeo, skinMat); legFR.position.set(0.32, 0.18, 0.45);
+        const legBL = new THREE.Mesh(legGeo, skinMat); legBL.position.set(-0.32, 0.18, -0.45);
+        const legBR = new THREE.Mesh(legGeo, skinMat); legBR.position.set(0.32, 0.18, -0.45);
+        [legFL, legFR, legBL, legBR].forEach(l => { l.castShadow = true; g.add(l); });
+
+        const tailGeo = new THREE.CylinderGeometry(0.03, 0.02, 0.22, 4);
+        const tail = new THREE.Mesh(tailGeo, skinMat);
+        tail.position.set(0, 0.75, -0.68);
+        tail.rotation.x = -0.8;
+        g.add(tail);
+
+        g.userData.legs = [legFL, legFR, legBL, legBR];
+        g.userData.tail = tail;
+        g.scale.setScalar(0.95);
+        return g;
+      }
+
+      function createMonkeyMesh() {
+        const g = new THREE.Group();
+        const furMat = new THREE.MeshStandardMaterial({ color: 0x5c3818, roughness: 0.9, flatShading: true });
+        const faceMat = new THREE.MeshStandardMaterial({ color: 0xd2996e, roughness: 0.8, flatShading: true });
+        const darkMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.9 });
+
+        const bodyGeo = new THREE.BoxGeometry(0.38, 0.52, 0.32);
+        const body = new THREE.Mesh(bodyGeo, furMat);
+        body.position.set(0, 0.42, 0);
+        body.castShadow = true;
+        g.add(body);
+
+        const headGeo = new THREE.SphereGeometry(0.20, 7, 6);
+        const head = new THREE.Mesh(headGeo, furMat);
+        head.position.set(0, 0.78, 0.08);
+        head.castShadow = true;
+        g.add(head);
+
+        const faceGeo = new THREE.BoxGeometry(0.24, 0.20, 0.10);
+        const face = new THREE.Mesh(faceGeo, faceMat);
+        face.position.set(0, 0.76, 0.22);
+        g.add(face);
+
+        const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.035, 4, 4), darkMat); eyeL.position.set(-0.06, 0.80, 0.28);
+        const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.035, 4, 4), darkMat); eyeR.position.set(0.06, 0.80, 0.28);
+        g.add(eyeL); g.add(eyeR);
+
+        const earGeo = new THREE.CylinderGeometry(0.07, 0.07, 0.03, 6);
+        const earL = new THREE.Mesh(earGeo, faceMat); earL.position.set(-0.21, 0.80, 0.06); earL.rotation.z = Math.PI / 2;
+        const earR = new THREE.Mesh(earGeo, faceMat); earR.position.set(0.21, 0.80, 0.06); earR.rotation.z = Math.PI / 2;
+        g.add(earL); g.add(earR);
+
+        const limbGeo = new THREE.CylinderGeometry(0.05, 0.045, 0.42, 5);
+        const armL = new THREE.Mesh(limbGeo, furMat); armL.position.set(-0.24, 0.45, 0.05); armL.rotation.z = -0.35;
+        const armR = new THREE.Mesh(limbGeo, furMat); armR.position.set(0.24, 0.45, 0.05); armR.rotation.z = 0.35;
+        const legL = new THREE.Mesh(limbGeo, furMat); legL.position.set(-0.16, 0.16, 0);
+        const legR = new THREE.Mesh(limbGeo, furMat); legR.position.set(0.16, 0.16, 0);
+        [armL, armR, legL, legR].forEach(l => { l.castShadow = true; g.add(l); });
+
+        const tailGeo = new THREE.CylinderGeometry(0.03, 0.02, 0.65, 5);
+        const tail = new THREE.Mesh(tailGeo, furMat);
+        tail.position.set(0, 0.48, -0.28);
+        tail.rotation.x = -1.2;
+        g.add(tail);
+
+        g.userData.limbs = [armL, armR, legL, legR];
+        g.userData.tail = tail;
+        g.scale.setScalar(0.9);
+        return g;
+      }
+
+      // -------------------------------------------------------------
+      // 5. LOOT MESH BUILDERS (Meat & Coconuts)
+      // -------------------------------------------------------------
+      function createMeatLootMesh() {
+        const g = new THREE.Group();
+        const meatMat = new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.65, flatShading: true });
+        const boneMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.8 });
+        const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.35, 0), meatMat);
+        m.scale.set(1.2, 0.8, 0.9);
+        m.castShadow = true;
+        g.add(m);
+        const b = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.8, 6), boneMat);
+        b.rotation.z = Math.PI / 2;
+        g.add(b);
+        return g;
+      }
+
+      function createCoconutLootMesh() {
+        const g = new THREE.Group();
+        const shellMat = new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.9, flatShading: true });
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.24, 7, 6), shellMat);
+        m.scale.set(1.0, 1.15, 1.0);
+        m.castShadow = true;
+        g.add(m);
+        return g;
+      }
+
+      // -------------------------------------------------------------
+      // 6. SPAWN WILDLIFE & HARVESTABLE PALMS
+      // -------------------------------------------------------------
+      function spawnWildlife() {
+        // Wild Pigs on sandy & grassy islands: Isla Grande, Rum Runner Key, Parrot Key, Mangrove Hollow, Hidden Cove, Port Royal
+        const pigSpots = [
+          { x: -460, z: 80 }, { x: -475, z: 65 }, { x: -450, z: 95 },
+          { x: -115, z: -320 }, { x: -125, z: -335 },
+          { x: 95, z: 45 }, { x: 105, z: 52 },
+          { x: -220, z: -525 }, { x: -235, z: -535 },
+          { x: 610, z: -585 }, { x: 620, z: -595 },
+          { x: 125, z: -140 }, { x: 135, z: -150 }
+        ];
+
+        pigSpots.forEach(pt => {
+          const h = Terrain.height(pt.x, pt.z);
+          if (h < 0.2) return;
+          const mesh = createWildPigMesh();
+          mesh.position.set(pt.x, h, pt.z);
+          mesh.rotation.y = Math.random() * Math.PI * 2;
+          scene.add(mesh);
+          wildlife.push({
+            type: 'pig',
+            mesh,
+            x: pt.x,
+            z: pt.z,
+            h,
+            heading: mesh.rotation.y,
+            speed: 1.2,
+            hp: 3,
+            maxHp: 3,
+            state: 'wander',
+            stateTimer: 2 + Math.random() * 4,
+            trotPhase: Math.random() * 6
+          });
+        });
+
+        // Monkeys on palm and jungle islands: Mermaid Lagoon, Turtle Atoll, Palm Haven, Pirate Haven, Smuggler's Rest, Corsair's Crown
+        const monkeySpots = [
+          { x: -410, z: 420 }, { x: -425, z: 410 }, { x: -395, z: 430 },
+          { x: -36, z: 57 }, { x: -45, z: 62 }, { x: -25, z: 52 },
+          { x: 330, z: 80 }, { x: 340, z: 88 },
+          { x: -140, z: 124 }, { x: -155, z: 130 },
+          { x: 570, z: 460 }, { x: 580, z: 470 },
+          { x: 130, z: 570 }, { x: 145, z: 580 }
+        ];
+
+        monkeySpots.forEach(pt => {
+          const h = Terrain.height(pt.x, pt.z);
+          if (h < 0.2) return;
+          const mesh = createMonkeyMesh();
+          mesh.position.set(pt.x, h, pt.z);
+          mesh.rotation.y = Math.random() * Math.PI * 2;
+          scene.add(mesh);
+          wildlife.push({
+            type: 'monkey',
+            mesh,
+            x: pt.x,
+            z: pt.z,
+            h,
+            heading: mesh.rotation.y,
+            speed: 2.2,
+            hp: 2,
+            maxHp: 2,
+            state: 'wander',
+            stateTimer: 1.5 + Math.random() * 3,
+            hopPhase: Math.random() * 6
+          });
+        });
+      }
+
+      function spawnHarvestablePalms() {
+        const palmSpots = [
+          { x: -330, z: 140 }, { x: -325, z: 146 },
+          { x: -35, z: 50 }, { x: -42, z: 65 }, { x: -30, z: 62 },
+          { x: 325, z: 75 }, { x: 335, z: 85 },
+          { x: 16, z: -43 }, { x: 22, z: -48 },
+          { x: 260, z: -250 }, { x: 268, z: -242 },
+          { x: 138, z: -105 }, { x: 144, z: -98 },
+          { x: -130, z: 110 }, { x: -145, z: 115 }
+        ];
+
+        palmSpots.forEach(pt => {
+          const h = Terrain.height(pt.x, pt.z);
+          if (h < 0.2) return;
+          const tree = createPalmTree(pt.x, h, pt.z, 1.05 + Math.random() * 0.2, 0.22, Math.random() * 6);
+          if (!tree) return;
+          harvestablePalms.push({
+            mesh: tree,
+            x: pt.x,
+            z: pt.z,
+            h,
+            hp: 3,
+            felled: false,
+            fallAngle: 0,
+            fallDir: Math.random() * Math.PI * 2,
+            shake: 0
+          });
+        });
+      }
+
+      // -------------------------------------------------------------
+      // 7. DISEMBARKATION & BOARDING FLOWS
+      // -------------------------------------------------------------
+      function disembarkToDinghy() {
+        if (mode !== 'ship') return;
+        const mainShip = player;
+        mainShip.isAnchored = true;
+        mainShip.speed = 0;
+        mainShip.targetSpeed = 0;
+        mainShip.sailState = 0;
+
+        // Launch dinghy to starboard beam of main ship
+        const launchDir = mainShip.heading + Math.PI / 2;
+        const dx = mainShip.position.x + Math.sin(launchDir) * (mainShip.tierConfig.scale * 3.2 + 2.0);
+        const dz = mainShip.position.z - Math.cos(launchDir) * (mainShip.tierConfig.scale * 3.2 + 2.0);
+        const dy = Math.max(0.1, Terrain.height(dx, dz) + 0.1);
+
+        dinghyState.position.set(dx, dy, dz);
+        dinghyState.heading = mainShip.heading;
+        dinghyState.speed = 0;
+        dinghyState.targetSpeed = 0;
+        dinghyMesh.position.copy(dinghyState.position);
+        dinghyMesh.rotation.y = -dinghyState.heading;
+        dinghyMesh.visible = true;
+
+        if (pirateChar) pirateChar.visible = false;
+        mode = 'dinghy';
+
+        playSound('splash');
+        playSound('bosun_pipe');
+        showBanner("🛶 Disembarked on dinghy! Row for shore or board another vessel.");
+        updateUI();
+      }
+
+      function stepAshore() {
+        if (mode !== 'dinghy') return;
+        // Step out onto dry sand ahead of the dinghy
+        const beachX = dinghyState.position.x + Math.sin(dinghyState.heading) * 2.2;
+        const beachZ = dinghyState.position.z - Math.cos(dinghyState.heading) * 2.2;
+        const beachY = Math.max(0.1, Terrain.height(beachX, beachZ));
+
+        pirateState.position.set(beachX, beachY, beachZ);
+        pirateState.heading = dinghyState.heading;
+        pirateState.speed = 0;
+        pirateChar.position.copy(pirateState.position);
+        pirateChar.rotation.y = -pirateState.heading;
+        pirateChar.visible = true;
+
+        // Dinghy remains beached at water's edge
+        dinghyState.speed = 0;
+        dinghyState.targetSpeed = 0;
+        if (dinghyState.rower) dinghyState.rower.visible = false;
+
+        mode = 'onfoot';
+        playSound('splash');
+        playSound('bell');
+        showBanner("🏝️ Ashore! Explore the island, hunt wild game, or harvest coconuts.");
+        updateUI();
+      }
+
+      function boardDinghyFromShore() {
+        if (mode !== 'onfoot') return;
+        pirateChar.visible = false;
+        if (dinghyState.rower) dinghyState.rower.visible = true;
+        mode = 'dinghy';
+        playSound('splash');
+        showBanner("🛶 Aboard the dinghy! Row with [W/A/S/D].");
+        updateUI();
+      }
+
+      function boardShip(targetShip) {
+        if (mode !== 'dinghy' && mode !== 'onfoot') return;
+        if (targetShip === player) {
+          // Returning to own flagship
+          dinghyMesh.visible = false;
+          if (pirateChar) pirateChar.visible = false;
+          mode = 'ship';
+          playSound('bell');
+          showBanner("⚓ Welcome back aboard your flagship, Captain!");
+          updateUI();
+        } else {
+          // Boarding another vessel
+          playSound('clash');
+          showBanner(`⚔️ Boarded the ${targetShip.name || 'vessel'}! Plunder her!`);
+        }
+      }
+
+      function handleDisembarkBtn() {
+        if (mode === 'ship') disembarkToDinghy();
+        else if (mode === 'dinghy') {
+          if (nearbyTarget && nearbyTarget.type === 'beach') stepAshore();
+          else if (nearbyTarget && nearbyTarget.type === 'ship') boardShip(nearbyTarget.obj);
+        } else if (mode === 'onfoot') {
+          if (nearbyTarget && nearbyTarget.type === 'dinghy') boardDinghyFromShore();
+          else if (nearbyTarget && nearbyTarget.type === 'ship') boardShip(nearbyTarget.obj);
+        }
+      }
+
+      function handleInteract() {
+        handleDisembarkBtn();
+      }
+
+      // -------------------------------------------------------------
+      // 8. WEAPON SELECTION & ATTACK LOGIC
+      // -------------------------------------------------------------
+      function selectWeapon(wName) {
+        if (!weapons[wName]) return;
+        activeWeapon = wName;
+        Object.keys(weapons).forEach(k => {
+          weapons[k].visible = (k === activeWeapon);
+        });
+        playSound('tick');
+        updateUI();
+      }
+
+      function attack() {
+        if (attackTimer > 0) return;
+        attackTimer = 0.38;
+
+        const pos = (mode === 'onfoot') ? pirateState.position : dinghyState.position;
+        const heading = (mode === 'onfoot') ? pirateState.heading : dinghyState.heading;
+        const fwdX = Math.sin(heading), fwdZ = -Math.cos(heading);
+
+        if (activeWeapon === 'cutlass') {
+          playSound('slash');
+          if (pirateState.armRight) {
+            pirateState.armRight.rotation.set(-0.9, 0.6, -0.7);
+          }
+        } else if (activeWeapon === 'spear') {
+          playSound('thrust');
+          if (pirateState.armRight) {
+            pirateState.armRight.rotation.set(-1.4, 0.0, 0.2);
+          }
+        } else if (activeWeapon === 'axe') {
+          playSound('chop');
+          if (pirateState.armRight) {
+            pirateState.armRight.rotation.set(-1.6, -0.3, 0.5);
+          }
+        }
+
+        const reach = (activeWeapon === 'spear') ? 3.8 : 2.5;
+        const damage = (activeWeapon === 'axe') ? 2 : 1;
+
+        // Check hit on wildlife
+        for (let i = wildlife.length - 1; i >= 0; i--) {
+          const w = wildlife[i];
+          const dx = w.x - pos.x, dz = w.z - pos.z;
+          const dist = Math.hypot(dx, dz);
+          if (dist <= reach) {
+            const dot = (dx * fwdX + dz * fwdZ) / dist;
+            if (dot > 0.35) {
+              w.hp -= damage;
+              w.state = 'flee';
+              w.stateTimer = 3.5;
+              w.heading = Math.atan2(dx, -dz);
+              if (w.type === 'pig') playSound('oink');
+              else playSound('monkey');
+
+              showDamageNumber(`-${damage} HP`, new THREE.Vector3(w.x, w.h + 0.8, w.z), '#ef4444');
+
+              if (w.hp <= 0) {
+                scene.remove(w.mesh);
+                const isPig = (w.type === 'pig');
+                const dropCount = isPig ? 2 : 1;
+                for (let k = 0; k < dropCount; k++) {
+                  spawnMeatLoot(w.x + (Math.random() - 0.5) * 0.8, w.z + (Math.random() - 0.5) * 0.8);
+                }
+                showBanner(isPig ? "🐗 Wild Pig defeated! Pick up Raw Meat 🍖" : "🐒 Monkey defeated! Pick up Meat 🍖");
+                wildlife.splice(i, 1);
+              }
+              break;
+            }
+          }
+        }
+
+        // Check hit on palm trees (using Axe)
+        if (activeWeapon === 'axe') {
+          for (let i = 0; i < harvestablePalms.length; i++) {
+            const p = harvestablePalms[i];
+            if (p.felled) continue;
+            const dx = p.x - pos.x, dz = p.z - pos.z;
+            const dist = Math.hypot(dx, dz);
+            if (dist <= 2.8) {
+              p.hp--;
+              p.shake = 0.6;
+              playSound('chop');
+              spawnSplinters(new THREE.Vector3(p.x, p.h + 1.2, p.z), 8);
+              showDamageNumber(`Chop! (${p.hp}/3)`, new THREE.Vector3(p.x, p.h + 2.0, p.z), '#facc15');
+
+              if (p.hp <= 0) {
+                p.felled = true;
+                p.fallAngle = 0.05;
+                // Spawn 2 to 3 coconuts on the sand
+                const numCocos = 2 + Math.floor(Math.random() * 2);
+                for (let c = 0; c < numCocos; c++) {
+                  spawnCoconutLoot(p.x + Math.sin(p.fallDir) * 3.5 + (Math.random() - 0.5) * 1.5, p.z - Math.cos(p.fallDir) * 3.5 + (Math.random() - 0.5) * 1.5);
+                }
+                playSound('coconut');
+                showBanner("🥥 Palm tree felled! Coconuts gathered on the sand!");
+              }
+              break;
+            }
+          }
+        }
+      }
+
+      function spawnMeatLoot(x, z) {
+        const mesh = createMeatLootMesh();
+        const y = Math.max(0.2, Terrain.height(x, z));
+        mesh.position.set(x, y + 0.35, z);
+        scene.add(mesh);
+        droppedLoot.push({ type: 'meat', mesh, x, z, y, bob: Math.random() * 6 });
+      }
+
+      function spawnCoconutLoot(x, z) {
+        const mesh = createCoconutLootMesh();
+        const y = Math.max(0.2, Terrain.height(x, z));
+        mesh.position.set(x, y + 0.25, z);
+        scene.add(mesh);
+        droppedLoot.push({ type: 'coconut', mesh, x, z, y, bob: Math.random() * 6 });
+      }
+
+      // -------------------------------------------------------------
+      // 9. SIMULATION UPDATE LOOPS
+      // -------------------------------------------------------------
+      function update(dt, curTime) {
+        if (attackTimer > 0) {
+          attackTimer = Math.max(0, attackTimer - dt);
+          if (attackTimer === 0 && pirateState.armRight) {
+            pirateState.armRight.rotation.set(0.12, 0, 0);
+          }
+        }
+
+        // 1. Dinghy Mode Motion
+        if (mode === 'dinghy') {
+          const held = Input.held || {};
+          let steer = 0, row = 0;
+          if (held.left) steer -= 1;
+          if (held.right) steer += 1;
+          if (held.up) row += 1;
+          if (held.down) row -= 0.6;
+
+          dinghyState.heading += steer * 2.2 * dt;
+          const targetSpd = row * 5.2;
+          dinghyState.speed = THREE.MathUtils.lerp(dinghyState.speed, targetSpd, Math.min(1, dt * 2.8));
+
+          dinghyState.position.x += Math.sin(dinghyState.heading) * dinghyState.speed * dt;
+          dinghyState.position.z -= Math.cos(dinghyState.heading) * dinghyState.speed * dt;
+
+          const waterH = getGerstnerWaterHeight(dinghyState.position.x, dinghyState.position.z, curTime);
+          const groundH = Terrain.height(dinghyState.position.x, dinghyState.position.z);
+          dinghyState.position.y = Math.max(groundH + 0.15, 0.12 + waterH);
+
+          dinghyMesh.position.copy(dinghyState.position);
+          dinghyMesh.rotation.y = -dinghyState.heading;
+
+          // Animate oars
+          if (Math.abs(dinghyState.speed) > 0.2) {
+            dinghyState.oarPhase += dt * 4.5;
+            const oarSwing = Math.sin(dinghyState.oarPhase) * 0.35;
+            if (dinghyState.oarL) dinghyState.oarL.rotation.y = oarSwing;
+            if (dinghyState.oarR) dinghyState.oarR.rotation.y = -oarSwing;
+          }
+
+          // Check proximity to beach or ships for prompt
+          nearbyTarget = null;
+          if (groundH > -0.65) {
+            nearbyTarget = { type: 'beach', text: 'Step Ashore' };
+          } else {
+            const distToMain = dinghyState.position.distanceTo(player.position);
+            if (distToMain < 8.0) {
+              nearbyTarget = { type: 'ship', obj: player, text: 'Board Flagship' };
+            } else {
+              for (const e of enemies) {
+                if (e.hp > 0 && dinghyState.position.distanceTo(e.position) < 8.0) {
+                  nearbyTarget = { type: 'ship', obj: e, text: `Board ${e.name || 'Ship'}` };
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        // 2. On-Foot Mode Motion
+        else if (mode === 'onfoot') {
+          const held = Input.held || {};
+          let mx = 0, mz = 0;
+          if (held.left) mx -= 1;
+          if (held.right) mx += 1;
+          if (held.up) mz -= 1;
+          if (held.down) mz += 1;
+
+          if (mx !== 0 || mz !== 0) {
+            const len = Math.hypot(mx, mz);
+            const walkSpd = 4.8;
+            pirateState.heading = Math.atan2(mx, -mz);
+            const nextX = pirateState.position.x + (mx / len) * walkSpd * dt;
+            const nextZ = pirateState.position.z + (mz / len) * walkSpd * dt;
+
+            // Only allow wading down to waist height (-0.85m)
+            if (Terrain.height(nextX, nextZ) > -0.85) {
+              pirateState.position.x = nextX;
+              pirateState.position.z = nextZ;
+            }
+            pirateState.speed = walkSpd;
+            pirateState.walkPhase += dt * 8.5;
+
+            // Waddle walk animation
+            pirateChar.rotation.z = Math.sin(pirateState.walkPhase) * 0.12;
+            if (pirateState.armLeft) pirateState.armLeft.rotation.z = -0.15 + Math.sin(pirateState.walkPhase) * 0.35;
+            if (pirateState.armRight && attackTimer <= 0) pirateState.armRight.rotation.z = 0.15 - Math.sin(pirateState.walkPhase) * 0.35;
+          } else {
+            pirateState.speed = 0;
+            pirateChar.rotation.z = 0;
+          }
+
+          pirateState.position.y = Math.max(0, Terrain.height(pirateState.position.x, pirateState.position.z));
+          pirateChar.position.copy(pirateState.position);
+          pirateChar.rotation.y = -pirateState.heading;
+
+          // Check proximity to dinghy or nearby ship
+          nearbyTarget = null;
+          const distToDinghy = pirateState.position.distanceTo(dinghyState.position);
+          if (distToDinghy < 5.0) {
+            nearbyTarget = { type: 'dinghy', text: 'Board Dinghy' };
+          } else {
+            const distToMain = pirateState.position.distanceTo(player.position);
+            if (distToMain < 8.0) {
+              nearbyTarget = { type: 'ship', obj: player, text: 'Board Ship' };
+            }
+          }
+        }
+
+        // 3. Wildlife AI & Animation
+        wildlife.forEach(w => {
+          w.stateTimer -= dt;
+          if (w.stateTimer <= 0) {
+            if (w.state === 'idle') {
+              w.state = 'wander';
+              w.heading += (Math.random() - 0.5) * 1.8;
+              w.stateTimer = 2.5 + Math.random() * 4;
+            } else if (w.state === 'wander') {
+              w.state = 'idle';
+              w.stateTimer = 1.5 + Math.random() * 2.5;
+            } else if (w.state === 'flee') {
+              w.state = 'wander';
+              w.stateTimer = 3.0;
+            }
+          }
+
+          const moveSpd = (w.state === 'flee') ? w.speed * 2.2 : (w.state === 'wander' ? w.speed : 0);
+          if (moveSpd > 0) {
+            const nextX = w.x + Math.sin(w.heading) * moveSpd * dt;
+            const nextZ = w.z - Math.cos(w.heading) * moveSpd * dt;
+            const nextH = Terrain.height(nextX, nextZ);
+
+            // Avoid walking into deep water
+            if (nextH > 0.15) {
+              w.x = nextX;
+              w.z = nextZ;
+              w.h = nextH;
+            } else {
+              w.heading += Math.PI * 0.8; // turn back toward island
+            }
+
+            // Animate trotting legs / limbs
+            w.trotPhase = (w.trotPhase || 0) + dt * (moveSpd * 5.0);
+            const legSwing = Math.sin(w.trotPhase) * 0.45;
+            if (w.mesh.userData.legs) {
+              w.mesh.userData.legs[0].rotation.x = legSwing;
+              w.mesh.userData.legs[1].rotation.x = -legSwing;
+              w.mesh.userData.legs[2].rotation.x = -legSwing;
+              w.mesh.userData.legs[3].rotation.x = legSwing;
+            }
+            if (w.mesh.userData.limbs) {
+              w.mesh.userData.limbs[0].rotation.x = legSwing;
+              w.mesh.userData.limbs[1].rotation.x = -legSwing;
+            }
+          }
+
+          w.mesh.position.set(w.x, w.h, w.z);
+          w.mesh.rotation.y = -w.heading;
+        });
+
+        // 4. Falling Palm Trees Animation
+        harvestablePalms.forEach(p => {
+          if (p.shake > 0) {
+            p.shake = Math.max(0, p.shake - dt * 2.0);
+            p.mesh.rotation.z = Math.sin(curTime * 25.0) * p.shake * 0.12;
+          }
+          if (p.felled && p.fallAngle < Math.PI / 2) {
+            p.fallAngle += dt * 1.8;
+            p.mesh.rotation.x = Math.sin(p.fallDir) * p.fallAngle;
+            p.mesh.rotation.z = Math.cos(p.fallDir) * p.fallAngle;
+          }
+        });
+
+        // 5. Dropped Loot Floating & Pickups
+        const playerPos = (mode === 'onfoot') ? pirateState.position : dinghyState.position;
+        for (let i = droppedLoot.length - 1; i >= 0; i--) {
+          const loot = droppedLoot[i];
+          loot.bob += dt * 3.0;
+          loot.mesh.position.y = loot.y + 0.35 + Math.sin(loot.bob) * 0.12;
+          loot.mesh.rotation.y += dt * 1.5;
+
+          if (playerPos.distanceTo(loot.mesh.position) < 2.0) {
+            if (loot.type === 'meat') {
+              meatCount += 2;
+              showDamageNumber("+2 Meat 🍖", playerPos, '#f87171');
+            } else if (loot.type === 'coconut') {
+              cocoCount += 1;
+              showDamageNumber("+1 Coconut 🥥", playerPos, '#a3e635');
+            }
+            playSound('coin');
+            scene.remove(loot.mesh);
+            droppedLoot.splice(i, 1);
+            updateUI();
+          }
+        }
+
+        updateUI();
+      }
+
+      function updateUI() {
+        const gunnery = document.getElementById('hud-gunnery');
+        const pirateBar = document.getElementById('hud-pirate-bar');
+        const disembarkChip = document.getElementById('btn-disembark-chip');
+        const interactLabel = document.getElementById('interact-label');
+
+        if (mode === 'ship') {
+          if (gunnery) gunnery.style.display = '';
+          if (pirateBar) pirateBar.style.display = 'none';
+          if (disembarkChip) {
+            disembarkChip.style.display = '';
+            document.getElementById('disembark-label').innerText = 'Disembark Dinghy';
+          }
+        } else {
+          if (gunnery) gunnery.style.display = 'none';
+          if (pirateBar) pirateBar.style.display = 'flex';
+          if (disembarkChip) disembarkChip.style.display = 'none';
+
+          // Update active weapon slot highlight
+          ['cutlass', 'spear', 'axe'].forEach(w => {
+            const el = document.getElementById('slot-' + w);
+            if (el) el.classList.toggle('active', w === activeWeapon);
+          });
+
+          // Update provisions counters
+          const meatEl = document.getElementById('hud-meat-val');
+          const cocoEl = document.getElementById('hud-coco-val');
+          if (meatEl) meatEl.innerText = meatCount;
+          if (cocoEl) cocoEl.innerText = cocoCount;
+
+          if (interactLabel) {
+            interactLabel.innerText = nearbyTarget ? nearbyTarget.text : (mode === 'dinghy' ? 'Rowing' : 'Board Dinghy');
+          }
+        }
+      }
+
+      function init() {
+        dinghyMesh = buildDinghy();
+        pirateChar = buildPirate();
+        spawnWildlife();
+        spawnHarvestablePalms();
+        updateUI();
+      }
+
+      return {
+        init,
+        update,
+        attack,
+        selectWeapon,
+        disembarkToDinghy,
+        stepAshore,
+        boardDinghy: boardDinghyFromShore,
+        boardShip,
+        handleDisembarkBtn,
+        handleInteract,
+        get mode() { return mode; },
+        get dinghyPosition() { return dinghyState.position; },
+        get dinghyHeading() { return dinghyState.heading; },
+        get dinghySpeed() { return dinghyState.speed; },
+        get piratePosition() { return pirateState.position; },
+        get pirateHeading() { return pirateState.heading; },
+        get pirateSpeed() { return pirateState.speed; },
+        get meat() { return meatCount; },
+        get coconuts() { return cocoCount; }
+      };
+    })();
+
 
 
     /* =========================================================================
@@ -12276,6 +13426,7 @@ var qrcode = function() {
     function updateSimulation(dt) {
       const curTime = clock.getElapsedTime();
       for (const P of captains.slice()) updateCaptain(P, dt, curTime);
+      if (typeof IslandExploration !== 'undefined') IslandExploration.update(dt, curTime);
       updateCoopCamera(dt);
       updateWorld(dt, curTime);
     }
@@ -12283,6 +13434,17 @@ var qrcode = function() {
     // Everything about ONE captain's ship: helm, sails, wind, motion, grounding, repairs, wakes, targeting
     function updateCaptain(P, dt, curTime) {
       const player = P;
+      if (typeof IslandExploration !== 'undefined' && IslandExploration.mode !== 'ship' && P.slot === 0) {
+        player.isAnchored = true;
+        player.speed = 0;
+        player.targetSpeed = 0;
+        player.rudderInput = 0;
+        if (player.mesh) {
+          player.mesh.position.copy(player.position);
+          player.mesh.rotation.set(player.pitch, -player.heading, player.roll, 'YXZ');
+        }
+        return;
+      }
       if (captains.length > 1) applyCoopTether(P, dt);
       // 0. Sinking Sequence when Hull reaches 0
       if (player.hp <= 0 && !player.isFallingOffEdge) {
@@ -13906,15 +15068,24 @@ var qrcode = function() {
       } else {
         // Smooth follow with a little look-ahead in the direction of travel, plus hit shake
         // Solo: follow the ship with a little look-ahead. Co-op: frame the whole fleet and zoom out as it spreads.
-        const fc = fleetCentre();
-        const lead = captains.length > 1 ? 0 : Math.min(14, fc.speed * 0.6);
+        let fc = fleetCentre();
+        let targetDist = Math.max(25, CAM_VIEW_DISTANCE + coopZoom + userZoomOffset);
+        if (typeof IslandExploration !== 'undefined' && IslandExploration.mode === 'dinghy') {
+          const dPos = IslandExploration.dinghyPosition;
+          fc = { x: dPos.x, z: dPos.z, heading: IslandExploration.dinghyHeading, speed: IslandExploration.dinghySpeed };
+          targetDist = Math.max(18, 28 + userZoomOffset);
+        } else if (typeof IslandExploration !== 'undefined' && IslandExploration.mode === 'onfoot') {
+          const pPos = IslandExploration.piratePosition;
+          fc = { x: pPos.x, z: pPos.z, heading: IslandExploration.pirateHeading, speed: IslandExploration.pirateSpeed };
+          targetDist = Math.max(14, 20 + userZoomOffset);
+        }
+        const lead = (captains.length > 1 || (typeof IslandExploration !== 'undefined' && IslandExploration.mode !== 'ship')) ? 0 : Math.min(14, fc.speed * 0.6);
         if (!debugCamHold) {
           camTarget.x = THREE.MathUtils.lerp(camTarget.x, fc.x + Math.sin(fc.heading) * lead, Math.min(1, dt * 3));
           camTarget.z = THREE.MathUtils.lerp(camTarget.z, fc.z - Math.cos(fc.heading) * lead, Math.min(1, dt * 3));
           const biggest = captains.reduce((m, c) => Math.max(m, c.tierConfig.scale), 0);
           CAM_VIEW_DISTANCE = 46 + biggest * 21; // small boats get a closer camera (dinghy 60 m … galleon 78 m)
-          const targetDist = Math.max(25, CAM_VIEW_DISTANCE + coopZoom + userZoomOffset);
-          camDist = THREE.MathUtils.lerp(camDist, targetDist, Math.min(1, dt * 1.5));
+          camDist = THREE.MathUtils.lerp(camDist, targetDist, Math.min(1, dt * 2.5));
         }
         let shakeAmt = 0;
         captains.forEach(c => { c.shake = Math.max(0, c.shake - dt * 1.8); shakeAmt = Math.max(shakeAmt, c.shake); });
@@ -13967,6 +15138,7 @@ var qrcode = function() {
       hasSave: savedGame.isSaved,
       summary: `${player.tierConfig.name} · ${player.gold} gold`
     });
+    if (typeof IslandExploration !== 'undefined') IslandExploration.init();
     animate();
 
   }
