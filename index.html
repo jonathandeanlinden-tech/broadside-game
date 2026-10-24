@@ -3167,6 +3167,11 @@ var qrcode = function() {
         if (k === 'ArrowUp' || k === 'w') held.up = true;
         if (k === 'ArrowDown' || k === 's') held.down = true;
 
+        if (exp && exp.mode !== 'ship') {
+          e.preventDefault();
+          return;
+        }
+
         if (e.repeat) handled = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Tab'].includes(k);
         else if (k === 'ArrowUp' || k === 'w') { if (e.shiftKey) call('burst'); else call('sailUp'); }
         else if (k === 'ArrowDown' || k === 's') call('sailDown');
@@ -3285,6 +3290,7 @@ var qrcode = function() {
 
       return {
         bind, onPadMessage,
+        held,
         forgetPad(id) {
           padCounters.delete(id);
           const seat = padSeat.get(id);
@@ -6532,112 +6538,8 @@ var qrcode = function() {
     const allAnimatedCharacters = [];
     let playerCrew = { captain: null, lookout: null, deckhands: [] };
 
-    let sharedBodyGeo = null;
-    let sharedTricornGeo = null;
-    let sharedArmLeftGeo = null;
-    let sharedArmRightGeo = null;
     let sharedSpyglassGeo = null;
     let sharedTankardGeo = null;
-
-    function getSharedBodyGeometry() {
-      if (sharedBodyGeo) return sharedBodyGeo;
-      const s = new THREE.Shape();
-      // Start at top of the inverted leg arch
-      s.moveTo(0, 0.20);
-      // Arch curve down to right foot tip
-      s.quadraticCurveTo(0.10, 0.20, 0.24, 0.0);
-      // Right leg outer edge curving up into hip/flank
-      s.quadraticCurveTo(0.32, 0.32, 0.28, 0.60);
-      // Head dome arc over the top (smooth continuous semicircle)
-      s.bezierCurveTo(0.25, 0.98, -0.25, 0.98, -0.28, 0.60);
-      // Left leg outer edge down to left foot tip
-      s.quadraticCurveTo(-0.32, 0.32, -0.24, 0.0);
-      // Arch curve back up to center
-      s.quadraticCurveTo(-0.10, 0.20, 0, 0.20);
-
-      const extrudeSettings = {
-        depth: 0.18,
-        bevelEnabled: true,
-        bevelSegments: 3,
-        steps: 1,
-        bevelSize: 0.05,
-        bevelThickness: 0.05
-      };
-      sharedBodyGeo = new THREE.ExtrudeGeometry(s, extrudeSettings);
-      sharedBodyGeo.center();
-      // Align so y=0 is at the soles of the feet
-      sharedBodyGeo.translate(0, 0.48, 0);
-      sharedBodyGeo.userData.shared = true;
-      return sharedBodyGeo;
-    }
-
-    function getSharedTricornGeometry() {
-      if (sharedTricornGeo) return sharedTricornGeo;
-      const h = new THREE.Shape();
-      // Left wing horn tip
-      h.moveTo(-0.52, 0.86);
-      // Bottom curved brim dipping across forehead
-      h.bezierCurveTo(-0.32, 0.70, -0.12, 0.68, 0.0, 0.68);
-      h.bezierCurveTo(0.12, 0.68, 0.32, 0.70, 0.52, 0.86);
-      // Right wing top edge sweeping into crown
-      h.quadraticCurveTo(0.35, 0.96, 0.26, 1.00);
-      // Right crown crest
-      h.quadraticCurveTo(0.16, 1.12, 0.10, 1.12);
-      // Center top crease/dip
-      h.quadraticCurveTo(0.05, 1.12, 0.0, 1.05);
-      // Left crown crest
-      h.quadraticCurveTo(-0.05, 1.12, -0.10, 1.12);
-      // Left crown slope down
-      h.quadraticCurveTo(-0.16, 1.12, -0.26, 1.00);
-      // Sweep out to left wing tip
-      h.quadraticCurveTo(-0.35, 0.96, -0.52, 0.86);
-
-      const extrudeSettings = {
-        depth: 0.24,
-        bevelEnabled: true,
-        bevelSegments: 3,
-        steps: 1,
-        bevelSize: 0.04,
-        bevelThickness: 0.04
-      };
-      sharedTricornGeo = new THREE.ExtrudeGeometry(h, extrudeSettings);
-      sharedTricornGeo.center();
-      // Position perched naturally on the head
-      sharedTricornGeo.translate(0, 0.88, 0);
-      sharedTricornGeo.userData.shared = true;
-      return sharedTricornGeo;
-    }
-
-    function getSharedArmGeometry(isRight = false) {
-      if (isRight && sharedArmRightGeo) return sharedArmRightGeo;
-      if (!isRight && sharedArmLeftGeo) return sharedArmLeftGeo;
-
-      const sign = isRight ? 1 : -1;
-      const a = new THREE.Shape();
-      // Shoulder pivot at (0, 0)
-      a.moveTo(0, 0);
-      a.lineTo(sign * 0.06, -0.04);
-      a.lineTo(sign * 0.12, -0.32);
-      a.quadraticCurveTo(sign * 0.10, -0.36, sign * 0.05, -0.36);
-      a.lineTo(-sign * 0.04, -0.08);
-      a.closePath();
-
-      const extrudeSettings = {
-        depth: 0.10,
-        bevelEnabled: true,
-        bevelSegments: 2,
-        steps: 1,
-        bevelSize: 0.025,
-        bevelThickness: 0.025
-      };
-      const geo = new THREE.ExtrudeGeometry(a, extrudeSettings);
-      geo.center();
-      geo.translate(sign * 0.04, -0.18, 0);
-      if (isRight) sharedArmRightGeo = geo;
-      else sharedArmLeftGeo = geo;
-      geo.userData.shared = true;
-      return geo;
-    }
 
     function getSharedSpyglassGeometry() {
       if (sharedSpyglassGeo) return sharedSpyglassGeo;
@@ -6661,118 +6563,229 @@ var qrcode = function() {
       const scale = options.scale || 0.9;
       charGrp.scale.set(scale, scale, scale);
 
-      const bodyColor = options.bodyColor !== undefined ? options.bodyColor : 0x111827; // solid deep black/charcoal silhouette
-      const bodyMat = new THREE.MeshStandardMaterial({
-        color: bodyColor,
-        roughness: 0.88,
-        metalness: 0.08
-      });
-      const bodyMesh = new THREE.Mesh(getSharedBodyGeometry(), bodyMat);
-      bodyMesh.castShadow = true;
-      bodyMesh.receiveShadow = true;
-      charGrp.add(bodyMesh);
+      const role = options.role || 'crew';
+      const isPlayerCrew = options.isPlayerCrew || false;
 
-      // Arms attached at shoulders
-      const armMat = bodyMat; // exact matching silhouette color
-      const armLeftPivot = new THREE.Group();
-      armLeftPivot.position.set(-0.26, 0.58, 0);
-      const armLeftMesh = new THREE.Mesh(getSharedArmGeometry(false), armMat);
-      armLeftMesh.castShadow = true;
-      armLeftPivot.add(armLeftMesh);
-      charGrp.add(armLeftPivot);
+      // Human Skin Tone (warm Caribbean tanned human skin)
+      const skinColor = options.skinColor || 0xdfa982;
+      const skinMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.82 });
 
-      const armRightPivot = new THREE.Group();
-      armRightPivot.position.set(0.26, 0.58, 0);
-      const armRightMesh = new THREE.Mesh(getSharedArmGeometry(true), armMat);
-      armRightMesh.castShadow = true;
-      armRightPivot.add(armRightMesh);
-      charGrp.add(armRightPivot);
+      // Human Clothing Colors based on role
+      let coatColor = 0x8a2f25; // default red coat
+      let trouserColor = 0x2b2520; // dark breeches
+      let bootColor = 0x14100d; // dark boots
+      let whiteShirt = true;
 
-      // Default rest pose (arms hanging slightly down and out, as in drawing)
-      armLeftPivot.rotation.z = -0.12;
-      armRightPivot.rotation.z = 0.12;
-
-      // Hat handling
-      let hatMesh = null;
-      const hasHat = options.hasHat !== undefined ? options.hasHat : (options.role === 'captain' || options.role === 'guard' || options.role === 'governor');
-      const hatType = options.hatType || (hasHat ? 'tricorn' : 'none');
-      const hatColor = options.hatColor !== undefined ? options.hatColor : 0x374151; // dark charcoal/slate from drawing
-
-      if (hatType === 'tricorn') {
-        const hatMat = new THREE.MeshStandardMaterial({
-          color: hatColor,
-          roughness: 0.82,
-          metalness: 0.12
-        });
-        hatMesh = new THREE.Mesh(getSharedTricornGeometry(), hatMat);
-        hatMesh.castShadow = true;
-        hatMesh.receiveShadow = true;
-
-        // Cockade / trim decoration for Governors, Navy, or Captains
-        if (options.role === 'governor' || options.role === 'navy_captain') {
-          const cockade = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.03, 8), new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.8 }));
-          cockade.position.set(0, 0.95, 0.14);
-          cockade.rotation.x = Math.PI / 2;
-          hatMesh.add(cockade);
-        } else if (options.role === 'captain') {
-          const badge = new THREE.Mesh(new THREE.DodecahedronGeometry(0.045, 0), new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.6 }));
-          badge.position.set(0, 0.96, 0.13);
-          hatMesh.add(badge);
-        }
-        charGrp.add(hatMesh);
-      } else if (hatType === 'bandana') {
-        const bandMat = new THREE.MeshStandardMaterial({ color: options.bandanaColor || 0xdc2626, roughness: 0.75 });
-        const bandGeo = new THREE.SphereGeometry(0.29, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.52);
-        hatMesh = new THREE.Mesh(bandGeo, bandMat);
-        hatMesh.position.set(0, 0.68, 0);
-        hatMesh.castShadow = true;
-
-        const tail = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.22, 4), bandMat);
-        tail.position.set(0, 0.70, -0.28);
-        tail.rotation.x = -1.2;
-        hatMesh.add(tail);
-        charGrp.add(hatMesh);
+      if (role === 'governor') {
+        coatColor = 0x1e3a8a; // regal colonial navy
+        trouserColor = 0xefebe0; // white breeches
+        bootColor = 0x111827;
+      } else if (role === 'guard') {
+        coatColor = 0xb91c1c; // colonial redcoat
+        trouserColor = 0xefebe0;
+        bootColor = 0x111827;
+      } else if (role === 'captain' || role === 'navy_captain') {
+        coatColor = options.coatColor || (options.isPlayerCrew ? 0x8b1e17 : 0x1f3a6e); // rich crimson or privateer blue
+        trouserColor = 0x2a2420;
+        bootColor = 0x181410;
+      } else if (role === 'patron') {
+        coatColor = 0x5c4a38;
+        trouserColor = 0x3e3226;
+      } else if (role === 'smuggler' || role === 'pirate') {
+        coatColor = 0x3a1a14;
+        trouserColor = 0x1e1e22;
+      } else if (role === 'dockworker' || role === 'crew') {
+        coatColor = 0xd8cfbe; // linen shirt
+        trouserColor = 0x5a4632;
+      } else if (role === 'castaway') {
+        coatColor = 0xc4b79b;
+        trouserColor = 0x4a3a2a;
+        whiteShirt = false;
       }
 
-      // Role-specific poses and props
-      const role = options.role || 'crew';
-      let propMesh = null;
+      if (options.bodyColor && options.bodyColor !== 0x111827) {
+        coatColor = options.bodyColor;
+      }
 
+      const coatMat = new THREE.MeshStandardMaterial({ color: coatColor, roughness: 0.84 });
+      const trouserMat = new THREE.MeshStandardMaterial({ color: trouserColor, roughness: 0.88 });
+      const bootMat = new THREE.MeshStandardMaterial({ color: bootColor, roughness: 0.85 });
+      const whiteMat = new THREE.MeshStandardMaterial({ color: 0xf5efe4, roughness: 0.85 });
+      const beltMat = new THREE.MeshStandardMaterial({ color: 0x24160c, roughness: 0.9 });
+      const buckleMat = new THREE.MeshStandardMaterial({ color: 0xd4a23a, metalness: 0.8, roughness: 0.35 });
+
+      // 1. Torso
+      const torsoGrp = new THREE.Group();
+      torsoGrp.position.set(0, 0.65, 0);
+      charGrp.add(torsoGrp);
+
+      const chest = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.52, 0.23), coatMat);
+      chest.position.y = 0.26;
+      chest.castShadow = true; chest.receiveShadow = true;
+      torsoGrp.add(chest);
+
+      if (whiteShirt) {
+        const cravat = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.22, 0.03), whiteMat);
+        cravat.position.set(0, 0.35, 0.12);
+        torsoGrp.add(cravat);
+      }
+
+      const belt = new THREE.Mesh(new THREE.BoxGeometry(0.39, 0.08, 0.24), beltMat);
+      belt.position.set(0, 0.04, 0);
+      torsoGrp.add(belt);
+
+      const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, 0.02), buckleMat);
+      buckle.position.set(0, 0.04, 0.125);
+      torsoGrp.add(buckle);
+
+      // 2. Human Head & Face
+      const headGrp = new THREE.Group();
+      headGrp.position.set(0, 0.52, 0);
+      torsoGrp.add(headGrp);
+
+      const headG = new THREE.SphereGeometry(0.13, 10, 8);
+      headG.scale(0.95, 1.1, 1.0);
+      const headMesh = new THREE.Mesh(headG, skinMat);
+      headMesh.position.set(0, 0.14, 0);
+      headMesh.castShadow = true;
+      headGrp.add(headMesh);
+
+      const nose = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.05, 0.055), skinMat);
+      nose.position.set(0, 0.14, 0.135);
+      headGrp.add(nose);
+
+      const eyeMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.5 });
+      const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, 0.02), eyeMat);
+      eyeL.position.set(-0.045, 0.165, 0.13);
+      const eyeR = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, 0.02), eyeMat);
+      eyeR.position.set(0.045, 0.165, 0.13);
+      headGrp.add(eyeL); headGrp.add(eyeR);
+
+      if (role === 'captain' || role === 'smuggler' || role === 'patron') {
+        const beard = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.11, 0.07), new THREE.MeshStandardMaterial({ color: 0x221c17, roughness: 0.9 }));
+        beard.position.set(0, 0.06, 0.095);
+        headGrp.add(beard);
+      }
+
+      // 3. Hat (Tricorn / Bandana / Cap / None)
+      let hatMesh = null;
+      const hasHat = options.hasHat !== undefined ? options.hasHat : (role === 'captain' || role === 'guard' || role === 'governor' || role === 'patron');
+      const hatType = options.hatType || (hasHat ? 'tricorn' : 'none');
+      const hatColor = options.hatColor || (role === 'governor' ? 0x1e3a8a : (role === 'guard' ? 0x1e293b : 0x1f242d));
+
+      if (hatType === 'tricorn') {
+        hatMesh = new THREE.Group();
+        hatMesh.position.set(0, 0.24, 0);
+        const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.13, 8), new THREE.MeshStandardMaterial({ color: hatColor, roughness: 0.8 }));
+        crown.position.set(0, 0.07, 0); crown.castShadow = true; hatMesh.add(crown);
+        const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.05, 3), new THREE.MeshStandardMaterial({ color: hatColor, roughness: 0.8 }));
+        brim.rotation.y = Math.PI / 6 + Math.PI; brim.position.set(0, 0.03, 0); brim.castShadow = true; hatMesh.add(brim);
+        const goldBand = new THREE.Mesh(new THREE.CylinderGeometry(0.285, 0.285, 0.015, 3), buckleMat);
+        goldBand.rotation.y = Math.PI / 6 + Math.PI; goldBand.position.set(0, 0.055, 0); hatMesh.add(goldBand);
+        headGrp.add(hatMesh);
+      } else if (hatType === 'bandana') {
+        hatMesh = new THREE.Group();
+        hatMesh.position.set(0, 0.22, 0);
+        const bandMat = new THREE.MeshStandardMaterial({ color: options.bandanaColor || 0xdc2626, roughness: 0.75 });
+        const bandGeo = new THREE.SphereGeometry(0.145, 9, 6, 0, Math.PI * 2, 0, Math.PI * 0.55);
+        const dome = new THREE.Mesh(bandGeo, bandMat); dome.position.set(0, -0.04, 0); dome.castShadow = true; hatMesh.add(dome);
+        const knot = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.10, 0.05), bandMat); knot.rotation.x = 0.5; knot.position.set(0, -0.06, -0.15); hatMesh.add(knot);
+        headGrp.add(hatMesh);
+      } else if (hatType === 'cap') {
+        hatMesh = new THREE.Group();
+        hatMesh.position.set(0, 0.23, 0);
+        const capMat = new THREE.MeshStandardMaterial({ color: hatColor, roughness: 0.85 });
+        const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.135, 0.10, 9), capMat); crown.position.set(0, 0.04, 0); hatMesh.add(crown);
+        const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.02, 12), capMat); brim.position.set(0, 0.01, 0); hatMesh.add(brim);
+        headGrp.add(hatMesh);
+      }
+
+      // 4. Arms & Hands
+      const armLeftPivot = new THREE.Group();
+      armLeftPivot.position.set(-0.25, 0.44, 0);
+      torsoGrp.add(armLeftPivot);
+
+      const uArmL = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.28, 0.12), coatMat);
+      uArmL.position.set(0, -0.14, 0); uArmL.castShadow = true; armLeftPivot.add(uArmL);
+      const fArmL = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.24, 0.11), coatMat);
+      fArmL.position.set(0, -0.32, 0); fArmL.castShadow = true; armLeftPivot.add(fArmL);
+      const handL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.085, 0.09), skinMat);
+      handL.position.set(0, -0.46, 0.01); armLeftPivot.add(handL);
+
+      const armRightPivot = new THREE.Group();
+      armRightPivot.position.set(0.25, 0.44, 0);
+      torsoGrp.add(armRightPivot);
+
+      const uArmR = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.28, 0.12), coatMat);
+      uArmR.position.set(0, -0.14, 0); uArmR.castShadow = true; armRightPivot.add(uArmR);
+      const fArmR = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.24, 0.11), coatMat);
+      fArmR.position.set(0, -0.32, 0); fArmR.castShadow = true; armRightPivot.add(fArmR);
+      const handR = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.085, 0.09), skinMat);
+      handR.position.set(0, -0.46, 0.01); armRightPivot.add(handR);
+
+      // Default poses
       if (role === 'captain') {
-        // Hands posed reaching forward to grip the helm wheel
-        armLeftPivot.rotation.set(-0.75, 0.28, -0.15);
-        armRightPivot.rotation.set(-0.75, -0.28, 0.15);
+        armLeftPivot.rotation.set(-0.65, 0.25, -0.12);
+        armRightPivot.rotation.set(-0.65, -0.25, 0.12);
       } else if (role === 'lookout') {
-        // Right arm holding brass spyglass up to eye level
         armRightPivot.rotation.set(-1.30, -0.25, 0.35);
         armLeftPivot.rotation.set(-0.35, 0.15, -0.20);
         const spyglassMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.85, roughness: 0.2 });
-        propMesh = new THREE.Mesh(getSharedSpyglassGeometry(), spyglassMat);
-        propMesh.position.set(0.06, -0.28, 0.12);
-        armRightPivot.add(propMesh);
+        const spyglass = new THREE.Mesh(getSharedSpyglassGeometry(), spyglassMat);
+        spyglass.position.set(0.06, -0.42, 0.12);
+        armRightPivot.add(spyglass);
       } else if (role === 'patron') {
-        // Holding a wooden tankard of grog
         armRightPivot.rotation.set(-0.85, -0.3, 0.2);
         const tankardMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.9 });
-        propMesh = new THREE.Mesh(getSharedTankardGeometry(), tankardMat);
-        propMesh.position.set(0.06, -0.24, 0.08);
-        armRightPivot.add(propMesh);
-      } else if (role === 'ghost') {
-        // Ethereal phantom pirate at Skull Rock with pulsating emerald eyes
-        const eyeMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
-        const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 6), eyeMat);
-        const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 6), eyeMat);
-        eyeL.position.set(-0.11, 0.76, 0.11);
-        eyeR.position.set(0.11, 0.76, 0.11);
-        charGrp.add(eyeL);
-        charGrp.add(eyeR);
-        charGrp.userData.ghostEyes = [eyeL, eyeR];
+        const tankard = new THREE.Mesh(getSharedTankardGeometry(), tankardMat);
+        tankard.position.set(0.06, -0.40, 0.08);
+        armRightPivot.add(tankard);
+      } else {
+        armLeftPivot.rotation.z = -0.10;
+        armRightPivot.rotation.z = 0.10;
+      }
+
+      // 5. Legs & Boots
+      const legLeftPivot = new THREE.Group();
+      legLeftPivot.position.set(-0.11, 0.65, 0);
+      charGrp.add(legLeftPivot);
+
+      const thighL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.34, 0.15), trouserMat);
+      thighL.position.set(0, -0.17, 0); thighL.castShadow = true; legLeftPivot.add(thighL);
+      const bootL = new THREE.Mesh(new THREE.BoxGeometry(0.135, 0.30, 0.145), bootMat);
+      bootL.position.set(0, -0.40, 0); bootL.castShadow = true; legLeftPivot.add(bootL);
+      const footL = new THREE.Mesh(new THREE.BoxGeometry(0.135, 0.08, 0.22), bootMat);
+      footL.position.set(0, -0.52, 0.04); footL.castShadow = true; legLeftPivot.add(footL);
+
+      const legRightPivot = new THREE.Group();
+      legRightPivot.position.set(0.11, 0.65, 0);
+      charGrp.add(legRightPivot);
+
+      const thighR = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.34, 0.15), trouserMat);
+      thighR.position.set(0, -0.17, 0); thighR.castShadow = true; legRightPivot.add(thighR);
+      const bootR = new THREE.Mesh(new THREE.BoxGeometry(0.135, 0.30, 0.145), bootMat);
+      bootR.position.set(0, -0.40, 0); bootR.castShadow = true; legRightPivot.add(bootR);
+      const footR = new THREE.Mesh(new THREE.BoxGeometry(0.135, 0.08, 0.22), bootMat);
+      footR.position.set(0, -0.52, 0.04); footR.castShadow = true; legRightPivot.add(footR);
+
+      // If seated (e.g. in dinghy or bench): pose hips and knees
+      if (options.isSeated) {
+        torsoGrp.position.y = 0.40;
+        legLeftPivot.position.y = 0.40;
+        legRightPivot.position.y = 0.40;
+        legLeftPivot.rotation.x = -Math.PI / 2;
+        legRightPivot.rotation.x = -Math.PI / 2;
       }
 
       const charData = {
         mesh: charGrp,
+        torso: torsoGrp,
+        head: headGrp,
         armLeft: armLeftPivot,
         armRight: armRightPivot,
+        handRight: handR,
+        legLeft: legLeftPivot,
+        legRight: legRightPivot,
         hat: hatMesh,
         role: role,
         baseScale: scale,
@@ -9331,107 +9344,44 @@ var qrcode = function() {
       }
 
       // -------------------------------------------------------------
-      // 2. DINGHY MESH BUILDER
+      // 2. DINGHY MESH BUILDER (Uses the authentic in-game Broadside dinghy model)
       // -------------------------------------------------------------
       function buildDinghy() {
-        const g = new THREE.Group();
-        const woodMat = new THREE.MeshStandardMaterial({ color: 0x5c3818, roughness: 0.85, flatShading: true });
-        const seatMat = new THREE.MeshStandardMaterial({ color: 0x854d0e, roughness: 0.8, flatShading: true });
-        const trimMat = new THREE.MeshStandardMaterial({ color: 0x27180c, roughness: 0.9 });
-
-        // Hull
-        const hullGeo = new THREE.BoxGeometry(1.8, 0.65, 4.2);
-        const hull = new THREE.Mesh(hullGeo, woodMat);
-        hull.position.y = 0.25;
-        hull.castShadow = true;
-        hull.receiveShadow = true;
-        g.add(hull);
-
-        // Gunwales
-        const gunwaleL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 4.25), trimMat);
-        gunwaleL.position.set(-0.92, 0.58, 0);
-        const gunwaleR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 4.25), trimMat);
-        gunwaleR.position.set(0.92, 0.58, 0);
-        g.add(gunwaleL); g.add(gunwaleR);
-
-        // Bow wedge
-        const bowGeo = new THREE.ConeGeometry(0.95, 1.2, 4);
-        const bow = new THREE.Mesh(bowGeo, woodMat);
-        bow.rotation.set(-Math.PI / 2, Math.PI / 4, 0);
-        bow.position.set(0, 0.25, 2.6);
-        bow.castShadow = true;
-        g.add(bow);
-
-        // Interior thwarts (seats)
-        const seat1 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.1, 0.45), seatMat);
-        seat1.position.set(0, 0.45, 0.4);
-        const seat2 = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.1, 0.45), seatMat);
-        seat2.position.set(0, 0.45, -1.1);
-        g.add(seat1); g.add(seat2);
-
-        // Two Oars
-        const oarMat = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.8 });
-        const oarLGrp = new THREE.Group();
-        oarLGrp.position.set(-0.95, 0.58, 0.4);
-        const oarLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.8, 5), oarMat);
-        oarLMesh.position.set(-1.1, -0.4, 0);
-        oarLMesh.rotation.z = 0.65;
-        oarLGrp.add(oarLMesh);
-        g.add(oarLGrp);
-
-        const oarRGrp = new THREE.Group();
-        oarRGrp.position.set(0.95, 0.58, 0.4);
-        const oarRMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.8, 5), oarMat);
-        oarRMesh.position.set(1.1, -0.4, 0);
-        oarRMesh.rotation.z = -0.65;
-        oarRGrp.add(oarRMesh);
-        g.add(oarRGrp);
-
-        // Seated pirate rower figurine in the dinghy
-        const rower = createCharacterMesh({
-          role: 'crew',
-          hasHat: true,
-          hatType: 'tricorn',
-          scale: 0.85
-        });
-        rower.position.set(0, 0.38, 0.35);
-        rower.rotation.y = Math.PI; // faces stern
-        if (rower.userData.characterData.armLeft) rower.userData.characterData.armLeft.rotation.set(-0.6, 0.3, -0.2);
-        if (rower.userData.characterData.armRight) rower.userData.characterData.armRight.rotation.set(-0.6, -0.3, 0.2);
-        g.add(rower);
-
-        dinghyState.oarL = oarLGrp;
-        dinghyState.oarR = oarRGrp;
-        dinghyState.rower = rower;
+        const g = buildShipMesh(0, false, 'player');
+        g.scale.setScalar(0.78);
         g.visible = false;
         scene.add(g);
         return g;
       }
 
       // -------------------------------------------------------------
-      // 3. ON-FOOT PIRATE CHARACTER BUILDER
+      // 3. ON-FOOT PIRATE CHARACTER BUILDER (Human Pirate Captain)
       // -------------------------------------------------------------
       function buildPirate() {
         const char = createCharacterMesh({
           role: 'captain',
           hasHat: true,
           hatType: 'tricorn',
-          hatColor: 0x1f2937,
+          coatColor: 0x8b1e17, // bold crimson pirate captain coat
           scale: 0.95
         });
-        pirateState.armLeft = char.userData.characterData.armLeft;
-        pirateState.armRight = char.userData.characterData.armRight;
+        const cd = char.userData.characterData;
+        pirateState.armLeft = cd.armLeft;
+        pirateState.armRight = cd.armRight;
+        pirateState.legLeft = cd.legLeft;
+        pirateState.legRight = cd.legRight;
 
         // Build 3 weapons and attach active one to right arm
         weapons.cutlass = buildCutlassMesh();
         weapons.spear = buildSpearMesh();
         weapons.axe = buildAxeMesh();
 
+        const handTarget = cd.handRight || cd.armRight;
         Object.values(weapons).forEach(w => {
-          w.position.set(0.06, -0.28, 0.14);
+          w.position.set(0.04, -0.42, 0.12);
           w.rotation.set(0.4, 0, 0);
           w.visible = false;
-          pirateState.armRight.add(w);
+          cd.armRight.add(w);
         });
 
         weapons[activeWeapon].visible = true;
@@ -9922,8 +9872,8 @@ var qrcode = function() {
           if (held.down) row -= 0.6;
 
           dinghyState.heading += steer * 2.2 * dt;
-          const targetSpd = row * 5.2;
-          dinghyState.speed = THREE.MathUtils.lerp(dinghyState.speed, targetSpd, Math.min(1, dt * 2.8));
+          const targetSpd = row * 6.5;
+          dinghyState.speed = THREE.MathUtils.lerp(dinghyState.speed, targetSpd, Math.min(1, dt * 3.5));
 
           dinghyState.position.x += Math.sin(dinghyState.heading) * dinghyState.speed * dt;
           dinghyState.position.z -= Math.cos(dinghyState.heading) * dinghyState.speed * dt;
@@ -9935,12 +9885,17 @@ var qrcode = function() {
           dinghyMesh.position.copy(dinghyState.position);
           dinghyMesh.rotation.y = -dinghyState.heading;
 
-          // Animate oars
-          if (Math.abs(dinghyState.speed) > 0.2) {
-            dinghyState.oarPhase += dt * 4.5;
-            const oarSwing = Math.sin(dinghyState.oarPhase) * 0.35;
-            if (dinghyState.oarL) dinghyState.oarL.rotation.y = oarSwing;
-            if (dinghyState.oarR) dinghyState.oarR.rotation.y = -oarSwing;
+          // Animate oars and rower in the authentic dinghy
+          if (Math.abs(dinghyState.speed) > 0.05) {
+            dinghyState.oarPhase = (dinghyState.oarPhase || 0) + dt * 4.5 * Math.sign(dinghyState.speed);
+            dinghyMesh.userData.rowPhase = dinghyState.oarPhase;
+            if (dinghyMesh.userData.oars) {
+              const oarSwing = Math.sin(dinghyState.oarPhase) * 0.45;
+              dinghyMesh.userData.oars.forEach(o => {
+                o.piv.rotation.y = o.s * oarSwing;
+                o.piv.rotation.z = Math.sin(dinghyState.oarPhase) * 0.12;
+              });
+            }
           }
 
           // Check proximity to beach or ships for prompt
@@ -9986,13 +9941,18 @@ var qrcode = function() {
             pirateState.speed = walkSpd;
             pirateState.walkPhase += dt * 8.5;
 
-            // Waddle walk animation
-            pirateChar.rotation.z = Math.sin(pirateState.walkPhase) * 0.12;
-            if (pirateState.armLeft) pirateState.armLeft.rotation.z = -0.15 + Math.sin(pirateState.walkPhase) * 0.35;
-            if (pirateState.armRight && attackTimer <= 0) pirateState.armRight.rotation.z = 0.15 - Math.sin(pirateState.walkPhase) * 0.35;
+            // Human leg stride and arm swing
+            const stride = Math.sin(pirateState.walkPhase) * 0.55;
+            if (pirateState.legLeft) pirateState.legLeft.rotation.x = stride;
+            if (pirateState.legRight) pirateState.legRight.rotation.x = -stride;
+            if (pirateState.armLeft) pirateState.armLeft.rotation.x = -stride * 0.75;
+            if (pirateState.armRight && attackTimer <= 0) pirateState.armRight.rotation.x = stride * 0.75;
           } else {
             pirateState.speed = 0;
-            pirateChar.rotation.z = 0;
+            if (pirateState.legLeft) pirateState.legLeft.rotation.x = 0;
+            if (pirateState.legRight) pirateState.legRight.rotation.x = 0;
+            if (pirateState.armLeft) pirateState.armLeft.rotation.x = 0;
+            if (pirateState.armRight && attackTimer <= 0) pirateState.armRight.rotation.x = 0;
           }
 
           pirateState.position.y = Math.max(0, Terrain.height(pirateState.position.x, pirateState.position.z));
@@ -14823,10 +14783,14 @@ var qrcode = function() {
             curPos.z += (dz / dist) * moveStep;
             curPos.y = curTarget.y || curPos.y;
             c.mesh.rotation.y = Math.atan2(dx, dz);
-            // Cute side-to-side penguin waddle walk
-            c.mesh.rotation.z = Math.sin(curTime * 8.5) * 0.14;
-            c.armLeft.rotation.z = -0.15 + Math.sin(curTime * 8.5) * 0.35;
-            c.armRight.rotation.z = 0.15 - Math.sin(curTime * 8.5) * 0.35;
+            // Human stride and arm swing
+            const stride = Math.sin(curTime * 8.5) * 0.45;
+            if (c.legLeft && c.legRight) {
+              c.legLeft.rotation.x = stride;
+              c.legRight.rotation.x = -stride;
+            }
+            if (c.armLeft) c.armLeft.rotation.x = -stride * 0.75;
+            if (c.armRight) c.armRight.rotation.x = stride * 0.75;
           }
         } else if (c.role === 'ghost') {
           // Phantom pirate eyes pulse softly
