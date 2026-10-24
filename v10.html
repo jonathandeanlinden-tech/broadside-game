@@ -3546,15 +3546,22 @@ var qrcode = function() {
         { x: 600, z: -590, rx: 7, rz: 9, blend: 4, d: -3.0 }     // Hidden Cove's anchorage
       ];
 
-      // Island bounding circles for fast rejection
+      // Scale up islands (~1.4x) and expand shelf width for gradual sandy beach tapers
       ISLANDS.forEach(I => {
         let cx = 0, cz = 0;
         I.lobes.forEach(l => { cx += l.x; cz += l.z; });
         cx /= I.lobes.length; cz /= I.lobes.length;
+        I.lobes.forEach(l => {
+          l.x = cx + (l.x - cx) * 1.30;
+          l.z = cz + (l.z - cz) * 1.30;
+          l.rx *= 1.40;
+          l.rz *= 1.40;
+        });
+        I.shelf = (I.shelf || 0.6) * 1.45;
         let r = 0;
         I.lobes.forEach(l => {
           const maxR = Math.max(l.rx, l.rz);
-          const shelfReach = Math.max(I.shelf * maxR, 7) * 2.85 + 22;
+          const shelfReach = Math.max(I.shelf * maxR, 12) * 3.2 + 25;
           r = Math.max(r, Math.hypot(l.x - cx, l.z - cz) + maxR + shelfReach);
         });
         I.cx = cx; I.cz = cz; I.br = r;
@@ -3573,21 +3580,21 @@ var qrcode = function() {
         for (const L of I.lobes) {
           const R = (L.rx + L.rz) * 0.5;
           const t0 = Math.hypot((x - L.x) / L.rx, (z - L.z) / L.rz);
-          const shelfW = Math.max(I.shelf * R, 7);
-          if ((t0 - 1) * R < shelfW * 2.85 + 16) { near = true; break; }
+          const shelfW = Math.max(I.shelf * R, 12);
+          if ((t0 - 1) * R < shelfW * 3.2 + 20) { near = true; break; }
         }
         if (!near) return -1e9;
-        const warp = 1 + 0.2 * fbm(x * 0.06, z * 0.06, 2) + 0.07 * noise(x * 0.21, z * 0.21);
+        const warp = 1 + 0.16 * fbm(x * 0.05, z * 0.05, 2) + 0.06 * noise(x * 0.18, z * 0.18);
         for (const L of I.lobes) {
           const dx = (x - L.x) / L.rx, dz = (z - L.z) / L.rz;
           const t = Math.sqrt(dx * dx + dz * dz) * (I.type === 'volcano' ? (1 + 0.6 * (warp - 1)) : warp);
           let h;
           if (t < 1) {
             const core = smooth(1.0, 0.2, t);
-            const hills = 0.75 + 0.5 * fbm(x * 0.09 + 11, z * 0.09 - 5, 3);
-            if (I.type === 'cay') h = 0.25 + (L.h - 0.25) * Math.pow(smooth(1.0, 0.45, t), 0.8) + 0.15 * noise(x * 0.4, z * 0.4);
-            else if (I.type === 'volcano') {
-              // a concave cone, gullied by ridges running down from a crater at the top
+            const hills = 0.75 + 0.45 * fbm(x * 0.08 + 11, z * 0.08 - 5, 3);
+            if (I.type === 'cay') {
+              h = 0.25 + (L.h - 0.25) * Math.pow(smooth(1.0, 0.4, t), 0.75) + 0.12 * noise(x * 0.35, z * 0.35);
+            } else if (I.type === 'volcano') {
               const ang = Math.atan2(z - L.z, x - L.x);
               const ridges = 1 + 0.07 * noise(ang * 5 + 11, t * 2.5) + 0.05 * Math.sin(ang * 11 + 4 * noise(x * 0.04, z * 0.04));
               const cr = I.crater ? 0.16 : 0;
@@ -3600,21 +3607,23 @@ var qrcode = function() {
               }
               h = Math.max(h, 0.35 + 0.9 * smooth(1.0, 0.86, t)) + 0.2 * noise(x * 0.3, z * 0.3);
             } else {
-              // Diorama style: steep rocky cliffs up to a flat grassy plateau, with stepped upper terraces…
-              const base = I.type === 'rocky' ? 5.6 : 4.8;
-              const cliffProfile = -0.3 + (base + 0.3) * smooth(1.0, 0.87, t)
-                + terrace(Math.max(0, L.h - base) * Math.pow(smooth(0.8, 0.2, t), 1.1) * hills, I.type === 'rocky' ? 2.2 : 2.6);
-              // …except in a few sheltered sandy coves where the cliff gives way to a beach
-              const beachProfile = 0.3 + smooth(1.0, 0.7, t) * 0.9 + Math.max(0, L.h - 1.25) * Math.pow(core, 1.5) * hills * 0.6;
-              const cove = I.type === 'rocky' ? 0 : smooth(0.42, 0.62, noise(x * 0.045 + 7, z * 0.045 - 3));
+              // Asymmetrical coast: sandy beach on sheltered sides, sharp cliff rocks on exposed sides
+              const base = I.type === 'rocky' ? 6.2 : 5.0;
+              // Sharp rock cliff: steep precipitous drop right into the sea
+              const cliffProfile = -0.4 + (base + 0.4) * smooth(1.0, 0.88, t)
+                + terrace(Math.max(0, L.h - base) * Math.pow(smooth(0.85, 0.15, t), 1.1) * hills, I.type === 'rocky' ? 2.2 : 2.6);
+              // Sandy beach: gentle, gradual slope rising slowly from the waterline into the interior
+              const beachProfile = 0.05 + smooth(1.0, 0.55, t) * 1.5 + Math.max(0, L.h - 1.5) * Math.pow(core, 1.4) * hills * 0.65;
+              const cove = I.type === 'rocky' ? 0.0 : smooth(0.35, 0.65, noise(x * 0.035 + 7, z * 0.035 - 3));
               h = cliffProfile + (beachProfile - cliffProfile) * cove;
             }
           } else {
+            // Gradual sandy shelf tapering smoothly into deeper sea
             const R = (L.rx + L.rz) * 0.5;
-            const s = (t - 1) * R / Math.max(I.shelf * R, 7); // 0 at shoreline, 1 at the reef edge (at least ~7 m wide)
-            // a broad turquoise apron like the diorama: shallow shelf, then a quick drop to the deep blue
-            h = -0.25 - 2.1 * smooth(0, 1.15, s) - 22 * smooth(1.45, 2.45, s);
-            if (I.crest) h += 2.6 * Math.exp(-Math.pow((s - 0.82) / 0.13, 2)) * smooth(-0.35, 0.05, noise(x * 0.11 + 4, z * 0.11));
+            const shelfW = Math.max(I.shelf * R, 14);
+            const s = (t - 1) * R / shelfW;
+            h = -0.15 - 1.6 * smooth(0.0, 0.65, s) - 4.5 * smooth(0.65, 1.5, s) - 17.5 * smooth(1.5, 3.2, s);
+            if (I.crest) h += 2.2 * Math.exp(-Math.pow((s - 0.75) / 0.15, 2)) * smooth(-0.35, 0.05, noise(x * 0.10 + 4, z * 0.10));
           }
           if (h > best) best = h;
         }
@@ -3671,7 +3680,7 @@ var qrcode = function() {
       ISLANDS.forEach(I => mark(I.cx - I.br, I.cz - I.br, I.cx + I.br, I.cz + I.br, (k, tx, tz) => {
         const cx = MIN_X + (tx + 0.5) * TILE, cz = MIN_Z + (tz + 0.5) * TILE;
         const hit = I.lobes.some(L => {
-          const R = (L.rx + L.rz) * 0.5, reach = Math.max(I.shelf * R, 7) * 2.85 + 18;
+          const R = (L.rx + L.rz) * 0.5, reach = Math.max(I.shelf * R, 12) * 3.2 + 25;
           const dt = Math.hypot((cx - L.x) / L.rx, (cz - L.z) / L.rz);
           return (dt - 1) * Math.min(L.rx, L.rz) - TILE * 0.75 < reach;
         });
@@ -4793,8 +4802,8 @@ var qrcode = function() {
         // Pure tropical water body color: clear aqua tint in shallows,
         // so the radiant golden coral sand at the bottom shines through
         // and physically gives the shallow water its world-famous turquoise color!
-        vec3 colShallow = mix(vec3(0.015, 0.08, 0.12), vec3(0.08, 0.62, 0.72), uDayFactor);
-        vec3 colMid     = mix(vec3(0.010, 0.045, 0.10), vec3(0.04, 0.32, 0.48), uDayFactor);
+        vec3 colShallow = mix(vec3(0.015, 0.08, 0.14), vec3(0.05, 0.62, 0.76), uDayFactor);
+        vec3 colMid     = mix(vec3(0.010, 0.045, 0.10), vec3(0.03, 0.36, 0.52), uDayFactor);
         vec3 colDeep    = mix(vec3(0.005, 0.020, 0.06), vec3(0.025, 0.16, 0.32), uDayFactor);
 
         float depthT1 = clamp(waterDepth / 6.0, 0.0, 1.0);
@@ -4807,7 +4816,7 @@ var qrcode = function() {
           float shallowFade = smoothstep(0.05, 0.25, waterDepth) * (1.0 - smoothstep(2.5, 5.0, waterDepth));
           float sCaustic = getOceanUnderwaterCaustic(vWorldPos.xz, uTime);
           vec3 sCol = mix(vec3(0.48, 0.94, 1.0), vec3(1.0, 1.0, 1.0), clamp(sCaustic * 0.65, 0.0, 1.0));
-          waterColor += sCol * (sCaustic * shallowFade * 0.22 * uDayFactor);
+          waterColor += sCol * (sCaustic * shallowFade * 0.12 * uDayFactor);
         }
 
         // Subtle soft cloud shadows
@@ -4872,12 +4881,12 @@ var qrcode = function() {
           waterColor = mix(waterColor, vec3(0.86, 0.93, 1.0) * (0.45 + 0.55 * uDayFactor), clamp(rings, 0.0, 1.0) * 0.5 * uRain);
         }
 
-        // Crystal-clear see-through shallows: the sandy seabed and coral show through clear water!
-        // Optical transmittance follows exponential depth extinction:
-        // In shallows (< 1.5m), opacity is low (0.06 - 0.18), allowing the bright sand to shine through!
-        float opticalAlpha = 1.0 - exp(-waterDepth * 0.09);
+        // Luminous Caribbean shallow water with soft optical turquoise body
+        // Opacity in shallows (0.28 to 0.45) softly veils the bottom,
+        // while the warm yellow sand and caustics glow through with semi-transparency
+        float opticalAlpha = 0.28 + 0.68 * (1.0 - exp(-waterDepth * 0.13));
         // Glancing view toward horizon reflects sky and becomes opaque
-        float waterAlpha = mix(clamp(opticalAlpha, 0.06, 0.96), 0.98, fresnel * 0.65);
+        float waterAlpha = mix(clamp(opticalAlpha, 0.28, 0.96), 0.98, fresnel * 0.65);
         // Shoreline surf and foam are opaque white
         waterAlpha = max(waterAlpha, foamAmt * 0.94);
 
@@ -5168,10 +5177,13 @@ var qrcode = function() {
 
     // Art-target colours for the terrain (linear, pre-lighting). Display ≈ ACES(lighting × value).
     const TERRAIN_STYLE = {
-      grass: [0.41, 0.47, 0.085], grassLight: [0.51, 0.54, 0.13], grassDark: [0.31, 0.38, 0.075],
-      path: [1.05, 0.88, 0.62], sand: [1.05, 0.94, 0.72], sandWet: [0.98, 0.88, 0.68],
-      reefSand: [1.02, 0.92, 0.70], reefCoral: [0.26, 0.34, 0.32], shelfSlope: [0.09, 0.22, 0.30],
-      cliff: [0.13, 0.135, 0.17], cliffWarm: [0.25, 0.18, 0.17], cliffDark: [0.08, 0.08, 0.1],
+      grass: [0.36, 0.50, 0.10], grassLight: [0.46, 0.58, 0.14], grassDark: [0.26, 0.40, 0.08],
+      path: [1.05, 0.88, 0.62],
+      sand: [1.08, 0.86, 0.42], // rich golden-yellow Caribbean sand
+      sandWet: [0.88, 0.70, 0.34], // warm moist yellow sand
+      reefSand: [1.02, 0.84, 0.40], // vibrant sunlit yellow shallow reef sand
+      reefCoral: [0.24, 0.32, 0.28], shelfSlope: [0.08, 0.22, 0.30],
+      cliff: [0.14, 0.14, 0.18], cliffWarm: [0.26, 0.18, 0.17], cliffDark: [0.09, 0.09, 0.11],
       deep: [0.045, 0.11, 0.19], abyssFloor: [0.025, 0.065, 0.13], seagrass: [0.18, 0.38, 0.22]
     };
     // 0 on a winding dirt path, rising to 1 away from it (shared by terrain colour + vegetation placement)
@@ -5196,22 +5208,22 @@ var qrcode = function() {
         const I = Terrain.islandAt(x, z), type = I ? I.type : 'sea';
         if (h < -0.2) {
           // Continuous bathymetric depth gradient:
-          // 0 to -2.8m: radiant golden coral sandbars visible through clear water
-          // -2.8m to -10m: submerged sandbar with coral reef rocks and seagrass meadows
-          // -10m to -18m: reef slope with coral stone, deeper blue-green shelf
+          // 0 to -3.2m: radiant golden-yellow coral sandbars visible through turquoise water
+          // -3.2m to -11m: submerged sandbar with coral reef rocks and seagrass meadows
+          // -11m to -18m: reef slope with coral stone, deeper blue-green shelf
           // < -18m: abyssal ocean floor (deep marine sediment)
           const isBlack = I && (I.black || type === 'volcano');
           const shallowSand = isBlack ? blackSand : reefSand;
 
-          if (h > -2.8) {
-            c.copy(shallowSand).lerp(reefCoral, Terrain.smooth(1.2, 2.8, -h) * (slope > 0.4 ? 0.75 : 0.22));
+          if (h > -3.2) {
+            c.copy(shallowSand).lerp(reefCoral, Terrain.smooth(1.4, 3.2, -h) * (slope > 0.4 ? 0.75 : 0.22));
             if (n2 > 0.22 && !isBlack) c.lerp(seagrass, 0.55 * Terrain.smooth(0.22, 0.65, n2));
-          } else if (h > -10.0) {
-            c.copy(reefCoral).lerp(shelfSlope, Terrain.smooth(2.8, 10.0, -h));
-            if (!isBlack && n2 > 0.32) c.lerp(seagrass, 0.35 * Terrain.smooth(0.32, 0.75, n2) * (1 - Terrain.smooth(5, 9, -h)));
+          } else if (h > -11.0) {
+            c.copy(reefCoral).lerp(shelfSlope, Terrain.smooth(3.2, 11.0, -h));
+            if (!isBlack && n2 > 0.32) c.lerp(seagrass, 0.35 * Terrain.smooth(0.32, 0.75, n2) * (1 - Terrain.smooth(6, 10, -h)));
             if (slope > 0.45) c.lerp(rock, 0.45);
           } else if (h > -18.0) {
-            c.copy(shelfSlope).lerp(deep, Terrain.smooth(10.0, 18.0, -h));
+            c.copy(shelfSlope).lerp(deep, Terrain.smooth(11.0, 18.0, -h));
             if (slope > 0.55) c.lerp(rockDark, 0.5);
           } else {
             const ripple = Terrain.noise(x * 0.08, z * 0.08) * 0.08;
@@ -5224,17 +5236,17 @@ var qrcode = function() {
           if (h < 1.3) c.copy(blackSand);
           else if (h < 8) c.copy(grassDark).lerp(grass, Terrain.smooth(-0.3, 0.6, n2) * 0.5).lerp(scorched, Terrain.smooth(5, 8, h) * 0.7);
           else c.copy(basalt).lerp(ash, Terrain.smooth(0.45, 0.85, streak) * 0.75).lerp(scorched, Terrain.smooth(8, 12, h) * (1 - Terrain.smooth(12, 16, h)) * 0.6 + Terrain.smooth(33, 39, h) * 0.85);
-        } else if (slope > 0.85 && type !== 'cay') {
-          // Cliff faces: cool slate rock, warmer brown where the noise says so, darker low down
+        } else if (slope > 0.75 && type !== 'cay') {
+          // Sharp rock cliff faces on the steep sides of the islands
           c.copy(rock).lerp(rockWarm, Terrain.smooth(0.0, 0.6, n) * 0.8).lerp(rockDark, Terrain.smooth(1.2, -0.4, h) * 0.5);
-        } else if (h < 1.35 || type === 'cay') {
+        } else if (h < 1.45 || type === 'cay') {
+          // Sandy beaches: warm golden-yellow sand
           c.copy(I && I.black ? blackSand : (h < 0.25 ? sandWet : sandDry));
           if (type === 'cay' && h > 1.05) c.lerp(grass, Terrain.smooth(1.05, 1.4, h) * 0.7);
         } else {
+          // In the center of the islands: lush green grass and trees
           c.copy(grass).lerp(grassLight, Terrain.smooth(-0.1, 0.7, n2) * 0.55).lerp(grassDark, Terrain.smooth(0.35, 0.9, n) * 0.35);
           if (type === 'rocky') c.lerp(rock, 0.45);
-          // winding cream dirt paths across the plateaus
-          if (slope < 0.6 && type === 'jungle') c.lerp(path, 1 - Terrain.smooth(0.035, 0.06, pathField(x, z)));
         }
         return c;
       }
@@ -5311,11 +5323,11 @@ var qrcode = function() {
              d1 = sqrt(d1);
              d2 = sqrt(d2);
              float edge = d2 - d1;
-             // Crisp white-hot filament line along the Voronoi ridge
-             float core = clamp(1.0 - edge * 4.6, 0.0, 1.0);
+             // Soft, realistic white-hot filament line along the Voronoi ridge
+             float core = clamp(1.0 - edge * 4.2, 0.0, 1.0);
              // Cyan dispersion glow surrounding the lines
-             float glow = clamp(1.0 - edge * 1.8, 0.0, 1.0);
-             return core * core * 1.35 + glow * 0.40;
+             float glow = clamp(1.0 - edge * 1.6, 0.0, 1.0);
+             return core * core * 0.85 + glow * 0.30;
            }
 
            // Multi-scale composite caustics matching Caribbean water photograph
@@ -5330,7 +5342,7 @@ var qrcode = function() {
              float c1 = voronoiCaustic(pos * 0.72, t * 1.15);
              // Secondary layer: finer delicate web filaments (~0.55m scale)
              float c2 = voronoiCaustic((pos + vec2(1.7, -2.4)) * 1.45, t * 1.40);
-             return clamp(c1 * 0.75 + c2 * 0.45, 0.0, 1.6);
+             return clamp(c1 * 0.75 + c2 * 0.45, 0.0, 1.5);
            }`
         );
 
@@ -5343,9 +5355,9 @@ var qrcode = function() {
              if (depthFade > 0.002) {
                float cVal = getUnderwaterCaustic(vTerrainWorldPos.xz, uTerrainTime);
                float daylight = clamp(uTerrainDayFactor, 0.0, 1.0);
-               // Brilliant white filaments with radiant cyan edge dispersion over the sand
-               vec3 cCol = mix(vec3(0.48, 0.94, 1.0), vec3(1.0, 1.0, 1.0), clamp(cVal * 0.65, 0.0, 1.0));
-               outgoingLight += cCol * (cVal * depthFade * (0.85 + 1.35 * daylight));
+               // Soft white filaments with delicate cyan dispersion over the golden-yellow sand
+               vec3 cCol = mix(vec3(0.48, 0.94, 1.0), vec3(1.0, 1.0, 1.0), clamp(cVal * 0.5, 0.0, 1.0));
+               outgoingLight += cCol * (cVal * depthFade * (0.32 + 0.45 * daylight));
              }
            }
            gl_FragColor = vec4( outgoingLight, diffuseColor.a );`
@@ -5594,26 +5606,25 @@ var qrcode = function() {
       const jungleSpot = (x, z, h) => {
         const ty = islandTypeAt(x, z);
         if (h < 1.6 || (ty !== 'jungle' && !(ty === 'volcano' && h < 7))) return false;
-        if (Math.hypot(x - 129, z - 115) < 25) return false; // keep Port Royal town clear
-        if (pathField(x, z) < 0.15) return false; // keep the dirt paths open
-        // trees grow in clumps with open meadows between them, like the reference diorama
-        const g = Terrain.gradient(x, z); return Math.hypot(g.x, g.z) < 1.0 && Terrain.fbm(x * 0.09, z * 0.09, 2) > 0.12;
+        if (Math.hypot(x - 129, z - 115) < 30) return false; // keep Port Royal town clear
+        // trees grow in the center and across the plateaus of every island
+        const g = Terrain.gradient(x, z); return Math.hypot(g.x, g.z) < 0.95;
       };
       const greens = [0x2c5a1c, 0x356a22, 0x264e18, 0x3d7226, 0x2f601e]; // deeper leaf green so canopies read against lime grass
-      const trees = instanced(treeGeo, treeMat, scatter(809, 95 * big, 20000, jungleSpot), p => {
-        const s = 0.75 + p.r() * 0.7;
+      const trees = instanced(treeGeo, treeMat, scatter(809, 160 * big, 30000, jungleSpot), p => {
+        const s = 0.8 + p.r() * 0.8;
         return { y: p.h - 0.2, sx: s, sy: s * (0.85 + p.r() * 0.4), sz: s, ry: p.r() * 6, color: greens[Math.floor(p.r() * greens.length)] };
       });
       if (trees) { trees.castShadow = true; trees.receiveShadow = true; }
       const bushGeo = new THREE.IcosahedronGeometry(0.9, 1);
       bushGeo.scale(1, 0.7, 1);
-      instanced(bushGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }), scatter(910, 80 * big, 20000, (x, z, h) =>
-        h > 1.0 && islandTypeAt(x, z) !== 'rocky' && islandTypeAt(x, z) !== 'volcano' && Math.hypot(x - 129, z - 115) > 21 && pathField(x, z) > 0.14), p => {
+      instanced(bushGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }), scatter(910, 110 * big, 30000, (x, z, h) =>
+        h > 1.2 && islandTypeAt(x, z) !== 'rocky' && islandTypeAt(x, z) !== 'volcano' && Math.hypot(x - 129, z - 115) > 25), p => {
         const s = 0.6 + p.r() * 0.9;
         return { y: p.h + 0.2, sx: s, sy: s, sz: s, ry: p.r() * 6, color: greens[Math.floor(p.r() * greens.length)] };
       });
       // Extra coconut palms along the beaches of every jungle island and sand cay
-      buildInstancedPalms(scatter(1011, 40 * big, 20000, (x, z, h) => h > 0.6 && h < 2.2 && islandTypeAt(x, z) !== 'rocky' && islandTypeAt(x, z) !== 'volcano' && Math.hypot(x - 129, z - 112) > 20));
+      buildInstancedPalms(scatter(1011, 75 * big, 30000, (x, z, h) => h > 0.6 && h < 2.4 && islandTypeAt(x, z) !== 'rocky' && islandTypeAt(x, z) !== 'volcano' && Math.hypot(x - 129, z - 112) > 25));
     }
 
     // Helper: walk from (x,z) in direction (dx,dz) until reaching dry land at least `minH` high
