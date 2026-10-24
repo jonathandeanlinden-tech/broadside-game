@@ -3552,7 +3552,11 @@ var qrcode = function() {
         I.lobes.forEach(l => { cx += l.x; cz += l.z; });
         cx /= I.lobes.length; cz /= I.lobes.length;
         let r = 0;
-        I.lobes.forEach(l => { r = Math.max(r, Math.hypot(l.x - cx, l.z - cz) + Math.max(l.rx, l.rz) * (2.4 + I.shelf) + 12); });
+        I.lobes.forEach(l => {
+          const maxR = Math.max(l.rx, l.rz);
+          const shelfReach = Math.max(I.shelf * maxR, 7) * 2.85 + 22;
+          r = Math.max(r, Math.hypot(l.x - cx, l.z - cz) + maxR + shelfReach);
+        });
         I.cx = cx; I.cz = cz; I.br = r;
         I.area = I.lobes.reduce((a, l) => a + l.rx * l.rz, 0);
       });
@@ -3567,8 +3571,10 @@ var qrcode = function() {
         // early out: well beyond every lobe's shelf, the island can't affect this point
         let near = false;
         for (const L of I.lobes) {
-          const R = Math.min(L.rx, L.rz), t0 = Math.hypot((x - L.x) / L.rx, (z - L.z) / L.rz) * 0.76;
-          if ((t0 - 1) * R < 2.45 * Math.max(I.shelf * (L.rx + L.rz) * 0.5, 7) + 3) { near = true; break; }
+          const R = (L.rx + L.rz) * 0.5;
+          const t0 = Math.hypot((x - L.x) / L.rx, (z - L.z) / L.rz);
+          const shelfW = Math.max(I.shelf * R, 7);
+          if ((t0 - 1) * R < shelfW * 2.85 + 16) { near = true; break; }
         }
         if (!near) return -1e9;
         const warp = 1 + 0.2 * fbm(x * 0.06, z * 0.06, 2) + 0.07 * noise(x * 0.21, z * 0.21);
@@ -3665,9 +3671,9 @@ var qrcode = function() {
       ISLANDS.forEach(I => mark(I.cx - I.br, I.cz - I.br, I.cx + I.br, I.cz + I.br, (k, tx, tz) => {
         const cx = MIN_X + (tx + 0.5) * TILE, cz = MIN_Z + (tz + 0.5) * TILE;
         const hit = I.lobes.some(L => {
-          const R = (L.rx + L.rz) * 0.5, reach = 2.45 * Math.max(I.shelf * R, 7) * 1.3 + 8;
-          const dt = Math.hypot((cx - L.x) / L.rx, (cz - L.z) / L.rz) * 0.75;
-          return (dt - 1) * Math.min(L.rx, L.rz) - TILE * 0.71 < reach;
+          const R = (L.rx + L.rz) * 0.5, reach = Math.max(I.shelf * R, 7) * 2.85 + 18;
+          const dt = Math.hypot((cx - L.x) / L.rx, (cz - L.z) / L.rz);
+          return (dt - 1) * Math.min(L.rx, L.rz) - TILE * 0.75 < reach;
         });
         if (hit) cand(k).isl.push(I);
       }));
@@ -3729,10 +3735,10 @@ var qrcode = function() {
         return bd < 2.2 ? best : null;
       }
 
-      // Tiles that hold land or shallows, for building the terrain mesh in chunks
+      // Tiles that hold land or bathymetric shelves, extending seamlessly to the ocean floor
       function activeTiles() {
         const out = [];
-        for (let k = 0; k < tiles.length; k++) if (tiles[k] && tiles[k].top > -12.5) out.push({ x0: MIN_X + (k % NT) * TILE, z0: MIN_Z + ((k / NT) | 0) * TILE, top: tiles[k].top });
+        for (let k = 0; k < tiles.length; k++) if (tiles[k]) out.push({ x0: MIN_X + (k % NT) * TILE, z0: MIN_Z + ((k / NT) | 0) * TILE, top: tiles[k].top });
         return out;
       }
 
@@ -3754,7 +3760,7 @@ var qrcode = function() {
         return { x, z };
       }
 
-      return { ISLANDS, RINGS, height, rawHeight, gradient, noise, fbm, smooth, rng, findWater, islandAt, activeTiles, MIN_X, MIN_Z, SIZE, RES, TILE, bakedSamples };
+      return { ISLANDS, RINGS, height, rawHeight, gradient, noise, fbm, smooth, rng, findWater, islandAt, activeTiles, MIN_X, MIN_Z, SIZE, RES, TILE, bakedSamples, seabed, coarseSeabed };
     })();
 
     /* =========================================================================
@@ -5110,17 +5116,20 @@ var qrcode = function() {
     const TERRAIN_STYLE = {
       grass: [0.41, 0.47, 0.085], grassLight: [0.51, 0.54, 0.13], grassDark: [0.31, 0.38, 0.075],
       path: [1.05, 0.88, 0.62], sand: [1.0, 0.86, 0.6], sandWet: [0.62, 0.52, 0.36],
+      reefSand: [0.82, 0.74, 0.52], reefCoral: [0.24, 0.28, 0.26], shelfSlope: [0.08, 0.20, 0.28],
       cliff: [0.13, 0.135, 0.17], cliffWarm: [0.25, 0.18, 0.17], cliffDark: [0.08, 0.08, 0.1],
-      deep: [0.05, 0.12, 0.2], seagrass: [0.16, 0.3, 0.2]
+      deep: [0.045, 0.11, 0.19], abyssFloor: [0.025, 0.065, 0.13], seagrass: [0.16, 0.3, 0.2]
     };
     // 0 on a winding dirt path, rising to 1 away from it (shared by terrain colour + vegetation placement)
     const pathField = (x, z) => Math.abs(Terrain.noise(x * 0.05 + 3, z * 0.05 - 8) + 0.125 * Terrain.noise(x * 0.11, z * 0.11 + 4));
 
-    // V19: the terrain is built only where there is land or shallow water, in 128 m chunks
-    // (so the camera can skip chunks that are off screen)
+    // The terrain is built in 128 m chunks, seamlessly extending from mountain tops to the ocean floor
     function buildTerrainMesh() {
       const P = TERRAIN_STYLE;
-      const deep = new THREE.Color().setRGB(...P.deep), sandWet = new THREE.Color().setRGB(...P.sandWet), sandDry = new THREE.Color().setRGB(...P.sand),
+      const deep = new THREE.Color().setRGB(...P.deep), abyssFloor = new THREE.Color().setRGB(...P.abyssFloor),
+        sandWet = new THREE.Color().setRGB(...P.sandWet), sandDry = new THREE.Color().setRGB(...P.sand),
+        reefSand = new THREE.Color().setRGB(...P.reefSand), reefCoral = new THREE.Color().setRGB(...P.reefCoral),
+        shelfSlope = new THREE.Color().setRGB(...P.shelfSlope),
         grass = new THREE.Color().setRGB(...P.grass), grassLight = new THREE.Color().setRGB(...P.grassLight), grassDark = new THREE.Color().setRGB(...P.grassDark),
         rock = new THREE.Color().setRGB(...P.cliff), rockWarm = new THREE.Color().setRGB(...P.cliffWarm), rockDark = new THREE.Color().setRGB(...P.cliffDark),
         path = new THREE.Color().setRGB(...P.path), seagrass = new THREE.Color().setRGB(...P.seagrass);
@@ -5131,9 +5140,30 @@ var qrcode = function() {
         const slope = Math.hypot(g.x, g.z);
         const n = Terrain.noise(x * 0.23, z * 0.23), n2 = Terrain.noise(x * 0.07 + 30, z * 0.07);
         const I = Terrain.islandAt(x, z), type = I ? I.type : 'sea';
-        if (h < -0.6) {
-          c.copy(I && (I.black || type === 'volcano') ? blackSand : sandWet).lerp(deep, Terrain.smooth(1.0, 9, -h));
-          if (h > -5 && n2 > 0.3) c.lerp(seagrass, 0.4 * Terrain.smooth(0.3, 0.6, n2));
+        if (h < -0.2) {
+          // Continuous bathymetric depth gradient:
+          // 0 to -1.5m: shallow sand / reef sand
+          // -1.5m to -5m: submerged sandbar with coral reef rocks and seagrass meadows
+          // -5m to -12m: reef slope with coral stone, deeper blue-green shelf
+          // -12m to -20m: continental drop-off, marine sediment
+          // < -20m: abyssal ocean floor (deep navy-slate sediment with subtle noise ripples)
+          const isBlack = I && (I.black || type === 'volcano');
+          const shallowSand = isBlack ? blackSand : (h > -0.8 ? sandWet : reefSand);
+
+          if (h > -2.5) {
+            c.copy(shallowSand).lerp(reefCoral, Terrain.smooth(0.8, 2.5, -h) * (slope > 0.4 ? 0.7 : 0.2));
+            if (n2 > 0.25 && !isBlack) c.lerp(seagrass, 0.5 * Terrain.smooth(0.25, 0.65, n2));
+          } else if (h > -10.0) {
+            c.copy(reefCoral).lerp(shelfSlope, Terrain.smooth(2.5, 10.0, -h));
+            if (!isBlack && n2 > 0.35) c.lerp(seagrass, 0.35 * Terrain.smooth(0.35, 0.75, n2) * (1 - Terrain.smooth(5, 9, -h)));
+            if (slope > 0.5) c.lerp(rock, 0.4);
+          } else if (h > -18.0) {
+            c.copy(shelfSlope).lerp(deep, Terrain.smooth(10.0, 18.0, -h));
+            if (slope > 0.6) c.lerp(rockDark, 0.45);
+          } else {
+            const ripple = Terrain.noise(x * 0.08, z * 0.08) * 0.08;
+            c.copy(deep).lerp(abyssFloor, Terrain.smooth(18.0, 24.0, -h)).addScalar(ripple);
+          }
         } else if (type === 'volcano') {
           // black beach, jungle skirts, ash slopes, dark basalt and scorched rock near the crater
           const L0 = I.lobes[0], ang = Math.atan2(z - L0.z, x - L0.x), rad = Math.hypot(x - L0.x, z - L0.z);
@@ -5155,7 +5185,7 @@ var qrcode = function() {
         }
         return c;
       }
-      const T = Terrain.TILE, Q = quality === 'high' ? 12 : 8, step = T / Q;
+      const T = Terrain.TILE, Q = quality === 'high' ? 8 : 6, step = T / Q;
       const chunks = new Map();
       Terrain.activeTiles().forEach(tile => {
         const key = Math.floor(tile.x0 / 128) + ',' + Math.floor(tile.z0 / 128);
@@ -5172,12 +5202,11 @@ var qrcode = function() {
             const x = tile.x0 + i * step, z = tile.z0 + j * step, h = Terrain.height(x, z);
             hs[j * (Q + 1) + i] = h;
             pos.push(x, h, z);
-            const cc = h < -12 ? deep : colourAt(x, z, h);
+            const cc = colourAt(x, z, h);
             col.push(cc.r, cc.g, cc.b);
           }
           for (let j = 0; j < Q; j++) for (let i = 0; i < Q; i++) {
             const a = j * (Q + 1) + i, b = a + Q + 1;
-            if (Math.max(hs[a], hs[a + 1], hs[b], hs[b + 1]) <= -12.5) continue; // deep seabed is never seen
             idx.push(base + a, base + b, base + a + 1, base + b, base + b + 1, base + a + 1);
           }
         });
@@ -5194,6 +5223,39 @@ var qrcode = function() {
         scene.add(mesh);
         meshes.push(mesh);
       });
+
+      // Continuous bathymetric seabed floor across the entire 1440 m world
+      const SEABED_RES = 180; // 8 m resolution across 1440 m
+      const seabedStep = Terrain.SIZE / SEABED_RES;
+      const sPos = [], sCol = [], sIdx = [];
+      for (let j = 0; j <= SEABED_RES; j++) {
+        const z = Terrain.MIN_Z + j * seabedStep;
+        for (let i = 0; i <= SEABED_RES; i++) {
+          const x = Terrain.MIN_X + i * seabedStep;
+          const h = Terrain.coarseSeabed ? Terrain.coarseSeabed(x, z) : Terrain.seabed(x, z);
+          sPos.push(x, h - 0.15, z); // slight offset to prevent Z-fighting where island meets floor
+          const cc = colourAt(x, z, h);
+          sCol.push(cc.r, cc.g, cc.b);
+        }
+      }
+      for (let j = 0; j < SEABED_RES; j++) {
+        for (let i = 0; i < SEABED_RES; i++) {
+          const a = j * (SEABED_RES + 1) + i, b = a + SEABED_RES + 1;
+          sIdx.push(a, b, a + 1, b, b + 1, a + 1);
+        }
+      }
+      const seabedGeo = new THREE.BufferGeometry();
+      seabedGeo.setAttribute('position', new THREE.Float32BufferAttribute(sPos, 3));
+      seabedGeo.setAttribute('color', new THREE.Float32BufferAttribute(sCol, 3));
+      seabedGeo.setIndex(sIdx);
+      seabedGeo.computeVertexNormals();
+      seabedGeo.computeBoundingSphere();
+      const seabedMesh = new THREE.Mesh(seabedGeo, mat);
+      seabedMesh.receiveShadow = true;
+      seabedMesh.castShadow = false;
+      scene.add(seabedMesh);
+      meshes.push(seabedMesh);
+
       return meshes;
     }
 
