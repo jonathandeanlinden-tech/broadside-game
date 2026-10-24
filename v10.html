@@ -4803,14 +4803,14 @@ var qrcode = function() {
         // Pure tropical water body color: clear aqua tint in shallows,
         // so the radiant golden coral sand at the bottom shines through
         // and physically gives the shallow water its world-famous turquoise color!
-        vec3 colShallow = mix(vec3(0.015, 0.08, 0.14), vec3(0.05, 0.62, 0.76), uDayFactor);
-        vec3 colMid     = mix(vec3(0.010, 0.045, 0.10), vec3(0.03, 0.36, 0.52), uDayFactor);
-        vec3 colDeep    = mix(vec3(0.005, 0.020, 0.06), vec3(0.025, 0.16, 0.32), uDayFactor);
-
-        float depthT1 = clamp(waterDepth / 6.0, 0.0, 1.0);
-        float depthT2 = clamp((waterDepth - 6.0) / 14.0, 0.0, 1.0);
-        vec3 waterColor = mix(colShallow, colMid, depthT1);
-        waterColor = mix(waterColor, colDeep, depthT2);
+        // Pure tropical water body tint: crystal-clear Caribbean turquoise
+        // The darker blues and multi-depth gradients are physically placed on the seabed beneath the water,
+        // eliminating any "floating spill" look on the surface plane!
+        vec3 colShallow = mix(vec3(0.012, 0.06, 0.12), vec3(0.05, 0.62, 0.76), uDayFactor);
+        vec3 colDeep    = mix(vec3(0.005, 0.02, 0.06), vec3(0.02, 0.14, 0.30), uDayFactor);
+        // Wide, seamless 25m water volume depth blend matching natural ocean light absorption
+        float depthFactor = smoothstep(2.0, 25.0, waterDepth);
+        vec3 waterColor = mix(colShallow, colDeep, depthFactor);
 
         // Realistic Voronoi caustic shimmer in shallow Caribbean water volume
         // Strictly 40% of the light from the sky: soft turquoise shimmer by day,
@@ -4889,11 +4889,11 @@ var qrcode = function() {
         }
 
         // Luminous Caribbean shallow water with soft optical turquoise body
-        // Opacity in shallows (0.28 to 0.45) softly veils the bottom,
+        // Opacity in shallows (0.20 to 0.40) softly veils the bottom,
         // while the warm yellow sand and caustics glow through with semi-transparency
-        float opticalAlpha = 0.28 + 0.68 * (1.0 - exp(-waterDepth * 0.13));
+        float opticalAlpha = 0.20 + 0.68 * (1.0 - exp(-waterDepth * 0.08));
         // Glancing view toward horizon reflects sky and becomes opaque
-        float waterAlpha = mix(clamp(opticalAlpha, 0.28, 0.96), 0.98, fresnel * 0.65);
+        float waterAlpha = mix(clamp(opticalAlpha, 0.20, 0.94), 0.98, fresnel * 0.65);
         // Shoreline surf and foam are opaque white
         waterAlpha = max(waterAlpha, foamAmt * 0.94);
 
@@ -5188,10 +5188,11 @@ var qrcode = function() {
       path: [1.05, 0.88, 0.62],
       sand: [1.08, 0.86, 0.42], // rich golden-yellow Caribbean sand
       sandWet: [0.88, 0.70, 0.34], // warm moist yellow sand
-      reefSand: [1.02, 0.84, 0.40], // vibrant sunlit yellow shallow reef sand
-      reefCoral: [0.24, 0.32, 0.28], shelfSlope: [0.08, 0.22, 0.30],
+      reefSand: [1.02, 0.85, 0.42], // vibrant sunlit yellow shallow reef sand
+      reefCoral: [0.18, 0.62, 0.68], // vibrant tropical Caribbean lagoon turquoise
+      shelfSlope: [0.07, 0.30, 0.52], // coastal azure ocean shelf
       cliff: [0.14, 0.14, 0.18], cliffWarm: [0.26, 0.18, 0.17], cliffDark: [0.09, 0.09, 0.11],
-      deep: [0.045, 0.11, 0.19], abyssFloor: [0.025, 0.065, 0.13], seagrass: [0.18, 0.38, 0.22]
+      deep: [0.04, 0.16, 0.32], abyssFloor: [0.02, 0.08, 0.20], seagrass: [0.18, 0.38, 0.22]
     };
     // 0 on a winding dirt path, rising to 1 away from it (shared by terrain colour + vegetation placement)
     const pathField = (x, z) => Math.abs(Terrain.noise(x * 0.05 + 3, z * 0.05 - 8) + 0.125 * Terrain.noise(x * 0.11, z * 0.11 + 4));
@@ -5214,27 +5215,42 @@ var qrcode = function() {
         const n = Terrain.noise(x * 0.23, z * 0.23), n2 = Terrain.noise(x * 0.07 + 30, z * 0.07);
         const I = Terrain.islandAt(x, z), type = I ? I.type : 'sea';
         if (h < -0.2) {
-          // Continuous bathymetric depth gradient:
-          // 0 to -3.2m: radiant golden-yellow coral sandbars visible through turquoise water
-          // -3.2m to -11m: submerged sandbar with coral reef rocks and seagrass meadows
-          // -11m to -18m: reef slope with coral stone, deeper blue-green shelf
-          // < -18m: abyssal ocean floor (deep marine sediment)
+          // Smooth continuous bathymetric depth gradient under the water:
+          // d = 0m to 2.5m: radiant golden-yellow coral sand (reefSand)
+          // d = 1.5m to 6.5m: smooth transition into vibrant Caribbean turquoise coral lagoon (reefCoral)
+          // d = 5.5m to 13.0m: smooth transition into coastal azure shelf (shelfSlope)
+          // d = 11.0m to 22.0m+: smooth transition into deep cobalt abyss floor (abyssFloor)
+          const d = -h;
           const isBlack = I && (I.black || type === 'volcano');
           const shallowSand = isBlack ? blackSand : reefSand;
 
-          if (h > -3.2) {
-            c.copy(shallowSand).lerp(reefCoral, Terrain.smooth(1.4, 3.2, -h) * (slope > 0.4 ? 0.75 : 0.22));
-            if (n2 > 0.22 && !isBlack) c.lerp(seagrass, 0.55 * Terrain.smooth(0.22, 0.65, n2));
-          } else if (h > -11.0) {
-            c.copy(reefCoral).lerp(shelfSlope, Terrain.smooth(3.2, 11.0, -h));
-            if (!isBlack && n2 > 0.32) c.lerp(seagrass, 0.35 * Terrain.smooth(0.32, 0.75, n2) * (1 - Terrain.smooth(6, 10, -h)));
-            if (slope > 0.45) c.lerp(rock, 0.45);
-          } else if (h > -18.0) {
-            c.copy(shelfSlope).lerp(deep, Terrain.smooth(11.0, 18.0, -h));
-            if (slope > 0.55) c.lerp(rockDark, 0.5);
-          } else {
-            const ripple = Terrain.noise(x * 0.08, z * 0.08) * 0.08;
-            c.copy(deep).lerp(abyssFloor, Terrain.smooth(18.0, 24.0, -h)).addScalar(ripple);
+          c.copy(shallowSand);
+          // Transition 1: golden sand -> vibrant tropical turquoise reef coral
+          const t1 = Terrain.smooth(1.5, 6.5, d);
+          if (t1 > 0.0) {
+            c.lerp(reefCoral, t1);
+          }
+          // Seagrass patches in sheltered shallows (1m to 8m)
+          if (!isBlack && n2 > 0.28 && d < 9.0) {
+            const grassMask = Terrain.smooth(0.28, 0.72, n2) * (1.0 - Terrain.smooth(5.0, 9.0, d)) * 0.40;
+            c.lerp(seagrass, grassMask);
+          }
+          // Transition 2: reef coral -> coastal azure shelf
+          const t2 = Terrain.smooth(5.5, 13.0, d);
+          if (t2 > 0.0) {
+            c.lerp(shelfSlope, t2);
+            if (slope > 0.45 && d < 14.0) c.lerp(rock, 0.35 * Terrain.smooth(0.45, 0.8, slope));
+          }
+          // Transition 3: coastal azure -> abyssal cobalt floor
+          const t3 = Terrain.smooth(11.0, 22.0, d);
+          if (t3 > 0.0) {
+            c.lerp(abyssFloor, t3);
+            if (slope > 0.55) c.lerp(rockDark, 0.40 * Terrain.smooth(0.55, 0.9, slope));
+          }
+          // Subtle organic sediment ripple in the deep sea
+          if (d > 16.0) {
+            const ripple = Terrain.noise(x * 0.08, z * 0.08) * 0.04;
+            c.addScalar(ripple);
           }
         } else if (type === 'volcano') {
           // black beach, jungle skirts, ash slopes, dark basalt and scorched rock near the crater
